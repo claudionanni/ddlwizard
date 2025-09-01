@@ -497,7 +497,9 @@ def compare_mode(config: DDLWizardConfig, args: argparse.Namespace):
     if args.visualize:
         logger.info("Generating schema visualizations...")
         visualizer = SchemaVisualizer()
-        schema_data = {'tables': {name: get_source_ddl('tables', name) for name in source_objects.get('tables', [])}}
+        # Extract table names from the objects structure
+        table_names = [table['name'] for table in source_objects.get('tables', [])]
+        schema_data = {'tables': {name: get_source_ddl('tables', name) for name in table_names}}
         visualizer.analyze_schema(schema_data)
         
         vis_output_dir = Path(config.output.output_dir) / "documentation"
