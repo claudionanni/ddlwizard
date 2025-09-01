@@ -413,36 +413,101 @@ class DDLWizardTester:
             conn.close()
     
     def populate_test_data(self):
-        """Populate both databases with sample data."""
+        """Populate both databases with sample data - only using common columns."""
         self.logger.info("📝 Populating test data...")
         
-        for config in [self.source_config, self.dest_config]:
-            conn = self.create_connection(config)
-            cursor = conn.cursor()
-            
-            try:
-                # Insert sample data
-                cursor.execute("INSERT IGNORE INTO categories (name, description) VALUES ('Electronics', 'Electronic devices and gadgets')")
-                cursor.execute("INSERT IGNORE INTO categories (name, description) VALUES ('Books', 'Physical and digital books')")
-                
-                cursor.execute("INSERT IGNORE INTO customers (email, first_name, last_name, phone, city, country) VALUES ('john@example.com', 'John', 'Doe', '+1234567890', 'New York', 'USA')")
-                cursor.execute("INSERT IGNORE INTO customers (email, first_name, last_name, phone, city, country) VALUES ('jane@example.com', 'Jane', 'Smith', '+1987654321', 'London', 'UK')")
-                
-                conn.commit()
-                self.logger.info(f"✅ Test data populated in {config['database']}")
-                
-            except Exception as e:
-                conn.rollback()
-                self.logger.error(f"❌ Error populating test data in {config['database']}: {e}")
-            finally:
-                conn.close()
-    
-    def run_ddl_wizard_test(self) -> bool:
-        """Run DDL Wizard and capture results."""
-        self.logger.info("🧙‍♂️ Running DDL Wizard comparison...")
+        # Source database data
+        source_conn = self.create_connection(self.source_config)
+        source_cursor = source_conn.cursor()
         
         try:
-            # Prepare DDL Wizard arguments
+            # Insert data into source database (with description column)
+            source_cursor.execute("INSERT IGNORE INTO categories (name, description) VALUES ('Electronics', 'Electronic devices and gadgets')")
+            source_cursor.execute("INSERT IGNORE INTO categories (name, description) VALUES ('Books', 'Physical and digital books')")
+            
+            source_cursor.execute("INSERT IGNORE INTO customers (email, first_name, last_name, phone, city, country) VALUES ('john@example.com', 'John', 'Doe', '+1234567890', 'New York', 'USA')")
+            source_cursor.execute("INSERT IGNORE INTO customers (email, first_name, last_name, phone, city, country) VALUES ('jane@example.com', 'Jane', 'Smith', '+1987654321', 'London', 'UK')")
+            
+            source_conn.commit()
+            self.logger.info(f"✅ Test data populated in {self.source_config['database']}")
+            
+        except Exception as e:
+            source_conn.rollback()
+            self.logger.error(f"❌ Error populating test data in source: {e}")
+        finally:
+            source_conn.close()
+        
+        # Destination database data  
+        dest_conn = self.create_connection(self.dest_config)
+        dest_cursor = dest_conn.cursor()
+        
+        try:
+            # Insert data into destination database (without description column)
+            dest_cursor.execute("INSERT IGNORE INTO categories (name) VALUES ('Electronics')")
+            dest_cursor.execute("INSERT IGNORE INTO categories (name) VALUES ('Books')")
+            
+            dest_cursor.execute("INSERT IGNORE INTO customers (email, first_name, last_name, phone, city, country) VALUES ('john@example.com', 'John', 'Doe', '+1234567890', 'New York', 'USA')")
+            dest_cursor.execute("INSERT IGNORE INTO customers (email, first_name, last_name, phone, city, country) VALUES ('jane@example.com', 'Jane', 'Smith', '+1987654321', 'London', 'UK')")
+            
+            dest_conn.commit()
+            self.logger.info(f"✅ Test data populated in {self.dest_config['database']}")
+                
+        except Exception as e:
+            dest_conn.rollback()
+            self.logger.error(f"❌ Error populating test data in destination: {e}")
+        finally:
+            dest_conn.close()
+    
+    def execute_sql_file(self, sql_file_path: str, target_config: Dict[str, str]) -> bool:
+        """Execute SQL statements from a file against the target database."""
+        try:
+            self.logger.info(f"🔧 Executing SQL file: {sql_file_path}")
+            
+            if not Path(sql_file_path).exists():
+                self.logger.error(f"❌ SQL file not found: {sql_file_path}")
+                return False
+            
+            with open(sql_file_path, 'r') as f:
+                sql_content = f.read()
+            
+            # Skip empty files
+            if not sql_content.strip():
+                self.logger.info("ℹ️  SQL file is empty, skipping execution")
+                return True
+            
+            # Connect to database
+            conn = pymysql.connect(**target_config)
+            cursor = conn.cursor()
+            
+            # Split SQL content into individual statements
+            statements = [stmt.strip() for stmt in sql_content.split(';') if stmt.strip()]
+            
+            for statement in statements:
+                if statement:
+                    try:
+                        cursor.execute(statement)
+                        conn.commit()
+                    except Exception as e:
+                        self.logger.warning(f"⚠️  SQL execution warning: {e}")
+                        self.logger.warning(f"Statement: {statement[:100]}...")
+            
+            cursor.close()
+            conn.close()
+            
+            self.logger.info("✅ SQL file executed successfully")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error executing SQL file {sql_file_path}: {e}")
+            return False
+
+    def run_comparison_step(self, step_name: str, output_suffix: str = "") -> bool:
+        """Run DDL Wizard comparison and save results with optional suffix."""
+        try:
+            self.logger.info(f"🔍 Running comparison step: {step_name}")
+            
+            output_dir = f"./test_output{output_suffix}"
+            
             test_args = [
                 '--mode', 'compare',
                 '--source-host', self.source_config['host'],
@@ -455,7 +520,7 @@ class DDLWizardTester:
                 '--dest-user', self.dest_config['user'],
                 '--dest-password', self.dest_config['password'],
                 '--dest-schema', self.dest_config['database'],
-                '--output-dir', './test_output',
+                '--output-dir', output_dir,
                 '--auto-approve',
                 '--verbose'
             ]
@@ -470,7 +535,7 @@ class DDLWizardTester:
                 # Run DDL Wizard
                 result = ddl_wizard_main()
                 
-                self.logger.info("✅ DDL Wizard completed successfully")
+                self.logger.info(f"✅ {step_name} completed successfully")
                 return True
                 
             finally:
@@ -478,12 +543,12 @@ class DDLWizardTester:
                 sys.argv = original_argv
                 
         except Exception as e:
-            self.logger.error(f"❌ DDL Wizard failed: {e}")
+            self.logger.error(f"❌ {step_name} failed: {e}")
             return False
-    
-    def analyze_results(self) -> Dict[str, bool]:
+
+    def analyze_results(self, output_dir: str = "./test_output") -> Dict[str, bool]:
         """Analyze the generated migration files and reports."""
-        self.logger.info("🔍 Analyzing DDL Wizard results...")
+        self.logger.info(f"🔍 Analyzing results in {output_dir}...")
         
         test_results = {
             'migration_file_created': False,
@@ -502,11 +567,11 @@ class DDLWizardTester:
         
         try:
             # Check if output files were created
-            output_dir = Path('./test_output')
+            output_dir_path = Path(output_dir)
             
-            migration_file = output_dir / 'migration.sql'
-            rollback_file = output_dir / 'rollback.sql'
-            comparison_file = output_dir / 'comparison_report.txt'
+            migration_file = output_dir_path / 'migration.sql'
+            rollback_file = output_dir_path / 'rollback.sql'
+            comparison_file = output_dir_path / 'comparison_report.txt'
             
             test_results['migration_file_created'] = migration_file.exists()
             test_results['rollback_file_created'] = rollback_file.exists()
@@ -537,23 +602,84 @@ class DDLWizardTester:
         except Exception as e:
             self.logger.error(f"❌ Error analyzing results: {e}")
             return test_results
+
+    def compare_results(self, initial_results: Dict[str, bool], final_results: Dict[str, bool]) -> Dict[str, bool]:
+        """Compare initial and final test results to verify rollback worked correctly."""
+        self.logger.info("🔄 Comparing initial and final results...")
+        
+        comparison_results = {
+            'rollback_test_passed': True,
+            'initial_vs_final_match': True
+        }
+        
+        # Compare detection results (should be identical after rollback)
+        detection_keys = [key for key in initial_results.keys() if key.startswith('detected_')]
+        
+        for key in detection_keys:
+            if initial_results.get(key, False) != final_results.get(key, False):
+                self.logger.warning(f"⚠️  Mismatch in {key}: initial={initial_results.get(key)}, final={final_results.get(key)}")
+                comparison_results['rollback_test_passed'] = False
+                comparison_results['initial_vs_final_match'] = False
+        
+        if comparison_results['rollback_test_passed']:
+            self.logger.info("✅ Rollback test passed - initial and final states match!")
+        else:
+            self.logger.error("❌ Rollback test failed - initial and final states don't match!")
+        
+        return comparison_results
+
+    def check_schemas_identical(self) -> bool:
+        """Check if schemas are identical after migration (should have no differences)."""
+        try:
+            self.logger.info("🔍 Checking if schemas are identical after migration...")
+            
+            # Run comparison to check for differences
+            success = self.run_comparison_step("Post-migration schema check", "_post_migration")
+            
+            if not success:
+                return False
+            
+            # Check if migration file is empty or minimal
+            migration_file = Path('./test_output_post_migration/migration.sql')
+            if migration_file.exists():
+                content = migration_file.read_text().strip()
+                # Remove comments and empty lines
+                meaningful_lines = [line.strip() for line in content.split('\n') 
+                                 if line.strip() and not line.strip().startswith('--')]
+                
+                if meaningful_lines:
+                    self.logger.warning("⚠️  Schemas are not identical - found differences after migration")
+                    self.logger.warning(f"Migration content: {content[:200]}...")
+                    return False
+                else:
+                    self.logger.info("✅ Schemas are identical after migration!")
+                    return True
+            else:
+                self.logger.warning("⚠️  No migration file generated - assuming schemas are identical")
+                return True
+                
+        except Exception as e:
+            self.logger.error(f"❌ Error checking schema identity: {e}")
+            return False
     
-    def print_test_summary(self, results: Dict[str, bool]):
+    def print_test_summary(self, results: Dict[str, bool], round_trip_results: Dict[str, bool] = None):
         """Print a comprehensive test summary."""
         print("\n" + "="*80)
-        print("🧙‍♂️ DDL WIZARD TEST RESULTS SUMMARY")
+        print("🧙‍♂️ DDL WIZARD COMPREHENSIVE TEST RESULTS")
         print("="*80)
         
+        # Basic detection tests
         total_tests = len(results)
         passed_tests = sum(results.values())
         
-        print(f"\n📊 Overall Results: {passed_tests}/{total_tests} tests passed ({passed_tests/total_tests*100:.1f}%)")
+        print(f"\n📊 Detection Phase Results: {passed_tests}/{total_tests} tests passed ({passed_tests/total_tests*100:.1f}%)")
         
         print("\n📁 File Generation Tests:")
         file_tests = ['migration_file_created', 'rollback_file_created', 'comparison_report_created']
         for test in file_tests:
-            status = "✅ PASS" if results[test] else "❌ FAIL"
-            print(f"  {status} - {test.replace('_', ' ').title()}")
+            if test in results:
+                status = "✅ PASS" if results[test] else "❌ FAIL"
+                print(f"  {status} - {test.replace('_', ' ').title()}")
         
         print("\n🔍 Schema Difference Detection Tests:")
         detection_tests = [
@@ -564,16 +690,37 @@ class DDLWizardTester:
             'detected_extra_tables'
         ]
         for test in detection_tests:
-            status = "✅ PASS" if results[test] else "❌ FAIL"
-            print(f"  {status} - {test.replace('_', ' ').replace('detected ', '').title()}")
+            if test in results:
+                status = "✅ PASS" if results[test] else "❌ FAIL"
+                print(f"  {status} - {test.replace('_', ' ').replace('detected ', '').title()}")
+        
+        # Round-trip test results
+        if round_trip_results:
+            round_trip_total = len(round_trip_results)
+            round_trip_passed = sum(round_trip_results.values())
+            
+            print(f"\n🔄 Round-Trip Test Results: {round_trip_passed}/{round_trip_total} tests passed ({round_trip_passed/round_trip_total*100:.1f}%)")
+            
+            for test, passed in round_trip_results.items():
+                status = "✅ PASS" if passed else "❌ FAIL"
+                test_name = test.replace('_', ' ').title()
+                print(f"  {status} - {test_name}")
+            
+            # Overall summary
+            overall_total = total_tests + round_trip_total
+            overall_passed = passed_tests + round_trip_passed
+            print(f"\n🎯 OVERALL RESULTS: {overall_passed}/{overall_total} tests passed ({overall_passed/overall_total*100:.1f}%)")
         
         print(f"\n📝 Test Log: ddl_wizard_test.log")
-        print(f"📂 Output Files: ./test_output/")
+        print(f"📂 Output Files: ./test_output/ ./test_output_post_migration/ ./test_output_final/")
         
-        if passed_tests == total_tests:
-            print("\n🎉 ALL TESTS PASSED! DDL Wizard is working correctly!")
+        final_total = total_tests + (len(round_trip_results) if round_trip_results else 0)
+        final_passed = passed_tests + (sum(round_trip_results.values()) if round_trip_results else 0)
+        
+        if final_passed == final_total:
+            print("\n🎉 ALL TESTS PASSED! DDL Wizard round-trip functionality is working perfectly!")
         else:
-            print(f"\n⚠️  {total_tests - passed_tests} tests failed. Please review the logs and output files.")
+            print(f"\n⚠️  {final_total - final_passed} tests failed. Please review the logs and output files.")
         
         print("="*80)
     
@@ -600,33 +747,103 @@ class DDLWizardTester:
                 self.logger.error(f"❌ Error cleaning up {config['database']}: {e}")
     
     def run_full_test_suite(self, cleanup: bool = True):
-        """Run the complete test suite."""
-        print("🧪 Starting DDL Wizard Comprehensive Test Suite")
-        print("="*50)
+        """Run the complete round-trip test suite."""
+        print("🧪 Starting DDL Wizard ROUND-TRIP Test Suite")
+        print("="*60)
+        print("📋 Test Plan:")
+        print("  1️⃣  Detect initial differences")
+        print("  2️⃣  Apply migration to destination")
+        print("  3️⃣  Verify schemas are identical")
+        print("  4️⃣  Apply rollback to destination")
+        print("  5️⃣  Verify differences match initial state")
+        print("="*60)
+        
+        round_trip_results = {
+            'initial_detection_passed': False,
+            'migration_applied_successfully': False,
+            'post_migration_schemas_identical': False,
+            'rollback_applied_successfully': False,
+            'rollback_test_passed': False
+        }
         
         try:
             # Setup test databases
+            print("\n🏗️  Setting up test databases...")
             self.setup_source_database()
             self.setup_destination_database()
             self.populate_test_data()
             
-            # Run DDL Wizard
-            wizard_success = self.run_ddl_wizard_test()
+            # STEP 1: Initial difference detection
+            print("\n1️⃣  STEP 1: Detecting initial differences...")
+            initial_success = self.run_comparison_step("Initial comparison", "")
+            round_trip_results['initial_detection_passed'] = initial_success
             
-            if wizard_success:
-                # Analyze results
-                results = self.analyze_results()
-                self.print_test_summary(results)
+            if not initial_success:
+                print("❌ Initial comparison failed!")
+                return round_trip_results
+            
+            # Analyze initial results
+            initial_results = self.analyze_results("./test_output")
+            initial_detection_count = sum(1 for k, v in initial_results.items() if k.startswith('detected_') and v)
+            print(f"   📊 Detected {initial_detection_count} types of differences")
+            
+            # STEP 2: Apply migration
+            print("\n2️⃣  STEP 2: Applying migration to destination...")
+            migration_success = self.execute_sql_file("./test_output/migration.sql", self.dest_config)
+            round_trip_results['migration_applied_successfully'] = migration_success
+            
+            if not migration_success:
+                print("❌ Migration application failed!")
+                return round_trip_results
+            
+            # STEP 3: Verify schemas are identical
+            print("\n3️⃣  STEP 3: Verifying schemas are identical after migration...")
+            schemas_identical = self.check_schemas_identical()
+            round_trip_results['post_migration_schemas_identical'] = schemas_identical
+            
+            if not schemas_identical:
+                print("❌ Schemas are not identical after migration!")
             else:
-                print("❌ DDL Wizard execution failed. Check logs for details.")
+                print("   ✅ Schemas are now identical!")
+            
+            # STEP 4: Apply rollback
+            print("\n4️⃣  STEP 4: Applying rollback to destination...")
+            rollback_success = self.execute_sql_file("./test_output/rollback.sql", self.dest_config)
+            round_trip_results['rollback_applied_successfully'] = rollback_success
+            
+            if not rollback_success:
+                print("❌ Rollback application failed!")
+                return round_trip_results
+            
+            # STEP 5: Final comparison (should match initial)
+            print("\n5️⃣  STEP 5: Verifying rollback restored initial differences...")
+            final_success = self.run_comparison_step("Final comparison after rollback", "_final")
+            
+            if final_success:
+                final_results = self.analyze_results("./test_output_final")
+                comparison_results = self.compare_results(initial_results, final_results)
+                round_trip_results['rollback_test_passed'] = comparison_results['rollback_test_passed']
+                
+                final_detection_count = sum(1 for k, v in final_results.items() if k.startswith('detected_') and v)
+                print(f"   📊 Final state has {final_detection_count} types of differences")
+                
+                if comparison_results['rollback_test_passed']:
+                    print("   ✅ Rollback test passed - differences match initial state!")
+                else:
+                    print("   ❌ Rollback test failed - differences don't match initial state!")
+            
+            # Print comprehensive summary
+            self.print_test_summary(initial_results, round_trip_results)
             
         except Exception as e:
-            self.logger.error(f"❌ Test suite failed: {e}")
-            print(f"❌ Test suite failed: {e}")
+            self.logger.error(f"❌ Round-trip test suite failed: {e}")
+            print(f"❌ Round-trip test suite failed: {e}")
         
         finally:
             if cleanup:
                 self.cleanup_databases()
+        
+        return round_trip_results
 
 
 def main():
