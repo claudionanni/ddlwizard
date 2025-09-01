@@ -231,15 +231,21 @@ class DDLWizardTester:
             CREATE TRIGGER tr_orders_update_timestamp
                 BEFORE UPDATE ON orders
                 FOR EACH ROW
-                SET NEW.updated_at = CURRENT_TIMESTAMP
+            BEGIN
+                SET NEW.notes = CONCAT(OLD.notes, ' - Updated at ', NOW());
+            END
             """)
             
-            cursor.execute("DROP TRIGGER IF EXISTS tr_products_update_timestamp")
+            cursor.execute("DROP TRIGGER IF EXISTS tr_products_stock_check")
             cursor.execute("""
-            CREATE TRIGGER tr_products_update_timestamp
+            CREATE TRIGGER tr_products_stock_check
                 BEFORE UPDATE ON products
                 FOR EACH ROW
-                SET NEW.updated_at = CURRENT_TIMESTAMP
+            BEGIN
+                IF NEW.stock_quantity < 0 THEN
+                    SET NEW.stock_quantity = 0;
+                END IF;
+            END
             """)
             
             conn.commit()
@@ -381,16 +387,20 @@ class DDLWizardTester:
             # CalculateOrderTotal function is not created here
             
             # Create different trigger
-            cursor.execute("DROP TRIGGER IF EXISTS tr_customers_update_timestamp")
+            cursor.execute("DROP TRIGGER IF EXISTS tr_customers_loyalty_update")
             cursor.execute("""
-            CREATE TRIGGER tr_customers_update_timestamp
+            CREATE TRIGGER tr_customers_loyalty_update
                 BEFORE UPDATE ON customers
                 FOR EACH ROW
-                SET NEW.updated_at = CURRENT_TIMESTAMP
+            BEGIN
+                IF NEW.loyalty_points IS NULL THEN
+                    SET NEW.loyalty_points = 0;
+                END IF;
+            END
             """)
             
-            # Missing trigger that exists in source
-            # tr_orders_update_timestamp and tr_products_update_timestamp are not created
+            # Missing triggers that exist in source
+            # tr_orders_update_timestamp and tr_products_stock_check are not created
             
             conn.commit()
             self.logger.info("✅ Destination database setup completed")
