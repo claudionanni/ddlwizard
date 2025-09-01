@@ -1,6 +1,6 @@
-# DDL Wizard - Enterprise Database Schema Management Tool
+# 🧙‍♂️ DDL Wizard - MariaDB Schema Management Tool
 
-A comprehensive Python tool for MariaDB/MySQL schema management, version control, and automated migration generation. DDL Wizard provides enterprise-grade features for safe, reliable database schema evolution.
+A comprehensive Python tool for MariaDB/MySQL schema management, version control, and automated migration generation. DDL Wizard provides professional-grade features for safe, reliable database schema evolution.
 
 ## 🚀 Features
 
@@ -11,7 +11,7 @@ A comprehensive Python tool for MariaDB/MySQL schema management, version control
 - **Migration Generation**: Automated ALTER statement generation with dependency ordering
 - **Rollback Support**: Generate rollback scripts for safe migration reversals
 
-### Enterprise Features
+### Advanced Features
 - **Safety Analysis**: Detect data loss scenarios and risky operations
 - **Dependency Management**: Analyze foreign key relationships and order operations correctly
 - **Interactive Mode**: User-friendly prompts with colored output and progress tracking

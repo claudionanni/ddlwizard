@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 DDL Wizard - Database Schema Management and Version Control Tool
-A comprehensive enterprise-grade tool for extracting DDL objects, managing schema versions, and generating migrations.
+A comprehensive tool for extracting DDL objects, managing schema versions, and generating migrations.
 """
 
 import argparse
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="DDL Wizard - Enterprise Database Schema Management Tool",
+        description="DDL Wizard - MariaDB Database Schema Management Tool",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     

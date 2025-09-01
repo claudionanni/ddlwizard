@@ -101,7 +101,7 @@ git add .
 # Create initial commit if no commits exist
 if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
     echo "📋 Creating initial commit..."
-    git commit -m "🧙‍♂️ Initial commit: DDL Wizard - Enterprise MariaDB Schema Management Tool
+    git commit -m "🧙‍♂️ Initial commit: DDL Wizard - MariaDB Schema Management Tool
 
 Features:
 - Schema comparison and migration generation
@@ -111,7 +111,7 @@ Features:
 - Migration history tracking
 - Multi-format documentation export
 - YAML configuration with profiles
-- Enterprise-grade features for production use"
+- Professional-grade features for production use"
     echo "✅ Initial commit created"
 else
     echo "✅ Repository already has commits"
@@ -135,7 +135,7 @@ echo
 echo "4. Your DDL Wizard will be live on GitHub! 🚀"
 echo
 echo "📚 Repository Features:"
-echo "- Complete enterprise DDL Wizard codebase"
+echo "- Complete DDL Wizard codebase"
 echo "- Comprehensive README with usage examples"
 echo "- Requirements file for easy installation"
 echo "- Sample configuration files"
