@@ -1,0 +1,98 @@
+# DDL Wizard Configuration File
+# This file demonstrates all available configuration options
+
+# Default profile
+default:
+  source:
+    host: "localhost"
+    port: 3306
+    user: "${DB_USER}"
+    password: "${DB_PASSWORD}"
+    schema: "source_schema"
+    
+  destination:
+    host: "localhost"
+    port: 3306
+    user: "${DB_USER}"
+    password: "${DB_PASSWORD}"
+    schema: "dest_schema"
+    
+  output:
+    output_dir: "./ddl_output"
+    migration_file: "migration.sql"
+    rollback_file: "rollback.sql"
+    
+  safety:
+    enable_dry_run: false
+    require_confirmation: true
+    backup_before_migration: true
+    max_affected_rows: 10000
+    dangerous_operations_allowed: false
+    validate_before_execution: true
+    
+  environment: "development"
+  log_level: "INFO"
+
+# Development environment profile
+development:
+  source:
+    host: "dev-db.example.com"
+    port: 3306
+    user: "${DEV_DB_USER}"
+    password: "${DEV_DB_PASSWORD}"
+    schema: "dev_app_db"
+    
+  destination:
+    host: "localhost"
+    port: 3306
+    user: "root"
+    password: "password"
+    schema: "local_dev_db"
+    
+  output:
+    output_dir: "./ddl_output"
+    migration_file: "migration.sql"
+    rollback_file: "rollback.sql"
+    
+  safety:
+    enable_dry_run: false
+    require_confirmation: false
+    backup_before_migration: true
+    max_affected_rows: 50000
+    dangerous_operations_allowed: true
+    validate_before_execution: true
+    
+  environment: "development"
+  log_level: "DEBUG"
+
+# Production environment profile  
+production:
+  source:
+    host: "prod-db.example.com"
+    port: 3306
+    user: "${PROD_DB_USER}"
+    password: "${PROD_DB_PASSWORD}"
+    schema: "production_db"
+    
+  destination:
+    host: "staging-db.example.com"
+    port: 3306
+    user: "${STAGING_DB_USER}"
+    password: "${STAGING_DB_PASSWORD}"
+    schema: "staging_db"
+    
+  output:
+    output_dir: "./production_migrations"
+    migration_file: "production_migration.sql"
+    rollback_file: "production_rollback.sql"
+    
+  safety:
+    enable_dry_run: true  # Always dry run in production
+    require_confirmation: true
+    backup_before_migration: true
+    max_affected_rows: 1000
+    dangerous_operations_allowed: false
+    validate_before_execution: true
+    
+  environment: "production"
+  log_level: "INFO"
