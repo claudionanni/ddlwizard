@@ -313,14 +313,61 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
                     # by checking if it has a 'has_differences' flag or similar indication
                     rollback_lines.append(f"-- Rollback procedure: {proc_name}")
                     rollback_lines.append(f"DROP PROCEDURE IF EXISTS `{proc_name}`;")
-                    # Add the destination's original DDL to restore it
-                    rollback_lines.append(dest_ddl)
+                    # Add the destination's original DDL to restore it with DELIMITER
+                    rollback_lines.append("DELIMITER $$")
+                    rollback_lines.append(dest_ddl + "$$")
+                    rollback_lines.append("DELIMITER ;")
                     rollback_lines.append("")
                 else:
                     rollback_lines.append(f"-- No changes needed for procedure {proc_name}")
                     
             except Exception as e:
                 rollback_lines.append(f"-- ERROR: Failed to process procedure {proc_name}: {str(e)}")
+                continue
+        
+        # Handle procedures that are only in source (created in migration, need restoration or DROP in rollback)
+        for proc_name in procedures_comparison.get('only_in_source', []):
+            rollback_lines.append(f"-- DEBUG: Processing only_in_source procedure {proc_name}")
+            try:
+                # Try to get destination DDL - if it exists, restore it; if not, drop the created procedure
+                try:
+                    dest_ddl = get_dest_ddl('procedures', proc_name)
+                    has_dest_ddl = bool(dest_ddl and dest_ddl.strip())
+                except Exception:
+                    # Procedure doesn't exist in destination
+                    dest_ddl = None
+                    has_dest_ddl = False
+                
+                if has_dest_ddl:
+                    # Procedure exists in destination - restore original version
+                    rollback_lines.append(f"-- Rollback procedure modification: {proc_name}")
+                    rollback_lines.append(f"DROP PROCEDURE IF EXISTS `{proc_name}`;")
+                    rollback_lines.append("DELIMITER $$")
+                    rollback_lines.append(dest_ddl + "$$")
+                    rollback_lines.append("DELIMITER ;")
+                    rollback_lines.append("")
+                else:
+                    # Procedure doesn't exist in destination - drop the created procedure
+                    rollback_lines.append(f"-- Rollback creation of procedure: {proc_name}")
+                    rollback_lines.append(f"DROP PROCEDURE IF EXISTS `{proc_name}`;")
+                    rollback_lines.append("")
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to process procedure {proc_name}: {str(e)}")
+                continue
+        
+        # Handle procedures that are only in destination (dropped in migration, need CREATE in rollback)
+        for proc_name in procedures_comparison.get('only_in_dest', []):
+            rollback_lines.append(f"-- DEBUG: Processing only_in_dest procedure {proc_name}")
+            try:
+                dest_ddl = get_dest_ddl('procedures', proc_name)
+                if dest_ddl:
+                    rollback_lines.append(f"-- Rollback deletion of procedure: {proc_name}")
+                    rollback_lines.append("DELIMITER $$")
+                    rollback_lines.append(dest_ddl + "$$")
+                    rollback_lines.append("DELIMITER ;")
+                    rollback_lines.append("")
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to restore procedure {proc_name}: {str(e)}")
                 continue
     
     # Process functions that exist in both and may have differences  
@@ -355,14 +402,61 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
                 if source_normalized != dest_normalized and dest_ddl:
                     rollback_lines.append(f"-- Rollback function: {func_name}")
                     rollback_lines.append(f"DROP FUNCTION IF EXISTS `{func_name}`;")
-                    # Add the destination's original DDL to restore it
-                    rollback_lines.append(dest_ddl)
+                    # Add the destination's original DDL to restore it with DELIMITER
+                    rollback_lines.append("DELIMITER $$")
+                    rollback_lines.append(dest_ddl + "$$")
+                    rollback_lines.append("DELIMITER ;")
                     rollback_lines.append("")
                 else:
                     rollback_lines.append(f"-- No changes needed for function {func_name}")
                     
             except Exception as e:
                 rollback_lines.append(f"-- ERROR: Failed to process function {func_name}: {str(e)}")
+                continue
+        
+        # Handle functions that are only in source (created in migration, need restoration or DROP in rollback)
+        for func_name in functions_comparison.get('only_in_source', []):
+            rollback_lines.append(f"-- DEBUG: Processing only_in_source function {func_name}")
+            try:
+                # Try to get destination DDL - if it exists, restore it; if not, drop the created function
+                try:
+                    dest_ddl = get_dest_ddl('functions', func_name)
+                    has_dest_ddl = bool(dest_ddl and dest_ddl.strip())
+                except Exception:
+                    # Function doesn't exist in destination
+                    dest_ddl = None
+                    has_dest_ddl = False
+                
+                if has_dest_ddl:
+                    # Function exists in destination - restore original version
+                    rollback_lines.append(f"-- Rollback function modification: {func_name}")
+                    rollback_lines.append(f"DROP FUNCTION IF EXISTS `{func_name}`;")
+                    rollback_lines.append("DELIMITER $$")
+                    rollback_lines.append(dest_ddl + "$$")
+                    rollback_lines.append("DELIMITER ;")
+                    rollback_lines.append("")
+                else:
+                    # Function doesn't exist in destination - drop the created function
+                    rollback_lines.append(f"-- Rollback creation of function: {func_name}")
+                    rollback_lines.append(f"DROP FUNCTION IF EXISTS `{func_name}`;")
+                    rollback_lines.append("")
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to process function {func_name}: {str(e)}")
+                continue
+        
+        # Handle functions that are only in destination (dropped in migration, need CREATE in rollback)
+        for func_name in functions_comparison.get('only_in_dest', []):
+            rollback_lines.append(f"-- DEBUG: Processing only_in_dest function {func_name}")
+            try:
+                dest_ddl = get_dest_ddl('functions', func_name)
+                if dest_ddl:
+                    rollback_lines.append(f"-- Rollback deletion of function: {func_name}")
+                    rollback_lines.append("DELIMITER $$")
+                    rollback_lines.append(dest_ddl + "$$")
+                    rollback_lines.append("DELIMITER ;")
+                    rollback_lines.append("")
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to restore function {func_name}: {str(e)}")
                 continue
     
     return rollback_lines
@@ -551,11 +645,133 @@ def compare_mode(config: DDLWizardConfig, args: argparse.Namespace):
     report_path.write_text(report)
     
     # Migration report
+    # Generate migration report data from comparison results
+    detailed_changes = []
+    
+    # Add table changes
+    if 'tables' in comparison:
+        tables_comparison = comparison['tables']
+        
+        # Tables only in source (to be created)
+        for table_name in tables_comparison.get('only_in_source', []):
+            detailed_changes.append({
+                'type': 'TABLE',
+                'object_name': table_name,
+                'operation': 'CREATE',
+                'sql': f"CREATE TABLE {table_name}"
+            })
+        
+        # Tables only in destination (to be dropped)
+        for table_name in tables_comparison.get('only_in_dest', []):
+            detailed_changes.append({
+                'type': 'TABLE',
+                'object_name': table_name,
+                'operation': 'DROP',
+                'sql': f"DROP TABLE {table_name}"
+            })
+        
+        # Tables with differences (to be modified)
+        for table_name in tables_comparison.get('in_both', []):
+            # Check if this table actually has differences using the same logic as rollback
+            try:
+                source_ddl = get_source_ddl('tables', table_name)
+                dest_ddl = get_dest_ddl('tables', table_name)
+                if source_ddl and dest_ddl:
+                    # Use the comparator to analyze table differences
+                    temp_comparator = SchemaComparator()
+                    differences = temp_comparator.analyze_table_differences(table_name, source_ddl, dest_ddl)
+                    if differences:
+                        detailed_changes.append({
+                            'type': 'TABLE',
+                            'object_name': table_name,
+                            'operation': 'MODIFY',
+                            'sql': f"ALTER TABLE {table_name}"
+                        })
+            except Exception:
+                pass
+    
+    # Add procedure changes
+    if 'procedures' in comparison:
+        procedures_comparison = comparison['procedures']
+        
+        # Procedures only in source (to be created)
+        for proc_name in procedures_comparison.get('only_in_source', []):
+            detailed_changes.append({
+                'type': 'PROCEDURE',
+                'object_name': proc_name,
+                'operation': 'CREATE',
+                'sql': f"CREATE PROCEDURE {proc_name}"
+            })
+        
+        # Procedures only in destination (to be dropped)
+        for proc_name in procedures_comparison.get('only_in_dest', []):
+            detailed_changes.append({
+                'type': 'PROCEDURE',
+                'object_name': proc_name,
+                'operation': 'DROP',
+                'sql': f"DROP PROCEDURE {proc_name}"
+            })
+        
+        # Procedures with differences (to be updated)
+        for proc_name in procedures_comparison.get('in_both', []):
+            try:
+                source_ddl = get_source_ddl('procedures', proc_name)
+                dest_ddl = get_dest_ddl('procedures', proc_name)
+                source_normalized = ' '.join(source_ddl.split()) if source_ddl else ''
+                dest_normalized = ' '.join(dest_ddl.split()) if dest_ddl else ''
+                if source_normalized != dest_normalized:
+                    detailed_changes.append({
+                        'type': 'PROCEDURE',
+                        'object_name': proc_name,
+                        'operation': 'UPDATE',
+                        'sql': f"DROP/CREATE PROCEDURE {proc_name}"
+                    })
+            except Exception:
+                pass
+    
+    # Add function changes
+    if 'functions' in comparison:
+        functions_comparison = comparison['functions']
+        
+        # Functions only in source (to be created)
+        for func_name in functions_comparison.get('only_in_source', []):
+            detailed_changes.append({
+                'type': 'FUNCTION',
+                'object_name': func_name,
+                'operation': 'CREATE',
+                'sql': f"CREATE FUNCTION {func_name}"
+            })
+        
+        # Functions only in destination (to be dropped)
+        for func_name in functions_comparison.get('only_in_dest', []):
+            detailed_changes.append({
+                'type': 'FUNCTION',
+                'object_name': func_name,
+                'operation': 'DROP',
+                'sql': f"DROP FUNCTION {func_name}"
+            })
+        
+        # Functions with differences (to be updated)
+        for func_name in functions_comparison.get('in_both', []):
+            try:
+                source_ddl = get_source_ddl('functions', func_name)
+                dest_ddl = get_dest_ddl('functions', func_name)
+                source_normalized = ' '.join(source_ddl.split()) if source_ddl else ''
+                dest_normalized = ' '.join(dest_ddl.split()) if dest_ddl else ''
+                if source_normalized != dest_normalized:
+                    detailed_changes.append({
+                        'type': 'FUNCTION',
+                        'object_name': func_name,
+                        'operation': 'UPDATE',
+                        'sql': f"DROP/CREATE FUNCTION {func_name}"
+                    })
+            except Exception:
+                pass
+
     migration_report_data = {
         'source_schema': source_config.schema,
         'destination_schema': dest_config.schema,
-        'detailed_changes': [{'type': op.get('type', 'UNKNOWN'), 'object_name': op.get('table_name', ''), 
-                             'operation': op.get('type', 'UNKNOWN'), 'sql': op.get('sql', '')} for op in ordered_operations],
+        'detailed_changes': detailed_changes,
         'safety_warnings': [{'level': w.level.value, 'message': w.message} for w in safety_warnings]
     }
     
