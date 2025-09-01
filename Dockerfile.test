@@ -26,4 +26,4 @@ ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
 # Default command
-CMD ["python", "test_ddl_wizard.py", "--help"]
+CMD ["python", "ddl_wizard_testsuite.py", "--help"]

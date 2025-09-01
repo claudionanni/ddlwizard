@@ -4,7 +4,7 @@ This directory contains comprehensive testing tools for validating DDL Wizard fu
 
 ## 🧪 Test Scripts Overview
 
-### 1. **Comprehensive Python Test Suite** (`test_ddl_wizard.py`)
+### 1. **Comprehensive Python Test Suite** (`ddl_wizard_testsuite.py`)
 The most complete test that creates complex schemas with every type of difference DDL Wizard should detect.
 
 **Features:**
@@ -20,7 +20,12 @@ The most complete test that creates complex schemas with every type of differenc
 python test_ddl_wizard.py
 
 # Run with custom database settings
-python test_ddl_wizard.py --host localhost --port 3306 --user root --password mypassword
+```bash
+python ddl_wizard_testsuite.py
+```bash
+python ddl_wizard_testsuite.py --host localhost --port 3306 --user root --password mypassword
+```bash
+python ddl_wizard_testsuite.py --no-cleanup
 
 # Run without cleanup (keep test databases for inspection)
 python test_ddl_wizard.py --no-cleanup
@@ -166,7 +171,7 @@ CREATE PROCEDURE GetUserOrderHistory(IN p_user_id INT) ...
 ### Adding New Test Cases
 
 1. **Modify Schema Files**: Edit `test_data/source_init.sql` and `test_data/dest_init.sql`
-2. **Update Test Logic**: Modify the validation logic in `test_ddl_wizard.py`
+2. **Update Test Logic**: Modify the validation logic in `ddl_wizard_testsuite.py`
 3. **Add Assertions**: Include new checks in the `analyze_results()` method
 
 ### Testing with Different Database Versions
@@ -175,8 +180,8 @@ The test suite supports various database configurations:
 
 ```bash
 # Test with different MySQL/MariaDB versions
-DB_HOST=mysql-8.0.server DB_PORT=3306 python test_ddl_wizard.py
-DB_HOST=mariadb-10.11.server DB_PORT=3306 python test_ddl_wizard.py
+DB_HOST=mysql-8.0.server DB_PORT=3306 python ddl_wizard_testsuite.py
+DB_HOST=mariadb-10.11.server DB_PORT=3306 python ddl_wizard_testsuite.py
 ```
 
 ### Custom Test Databases
@@ -184,7 +189,7 @@ DB_HOST=mariadb-10.11.server DB_PORT=3306 python test_ddl_wizard.py
 You can point the tests to existing databases:
 
 ```bash
-python test_ddl_wizard.py \
+python ddl_wizard_testsuite.py \
   --host your-db-server.com \
   --port 3306 \
   --user your_user \
@@ -248,7 +253,7 @@ ddl_wizard_test.log         # Detailed test execution log
 
 Run tests with verbose logging:
 ```bash
-python test_ddl_wizard.py --verbose
+python ddl_wizard_testsuite.py --verbose
 tail -f ddl_wizard_test.log
 ```
 

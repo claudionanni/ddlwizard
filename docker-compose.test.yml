@@ -73,7 +73,7 @@ services:
         echo 'Waiting for databases to be ready...' &&
         sleep 10 &&
         echo 'Running DDL Wizard tests...' &&
-        python test_ddl_wizard.py --host mariadb-source --user root --password test_password &&
+        python ddl_wizard_testsuite.py --host mariadb-source --user root --password test_password &&
         echo 'Tests completed!'
       "
 
