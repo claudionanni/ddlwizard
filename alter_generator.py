@@ -78,7 +78,7 @@ class AlterStatementGenerator:
         
         # Combine column/table changes into single ALTER TABLE statement
         if alter_clauses:
-            alter_sql = f"ALTER TABLE `{self.dest_schema}`.`{table_name}`\\n  " + ",\\n  ".join(alter_clauses)
+            alter_sql = f"ALTER TABLE `{self.dest_schema}`.`{table_name}`\n  " + ",\n  ".join(alter_clauses)
             statements.append(alter_sql)
         
         # Add separate index statements
@@ -235,4 +235,136 @@ class AlterStatementGenerator:
             elif change_type == ChangeType.CHANGE_COLLATION:
                 report_lines.append(f"  ~ CHANGE COLLATION: {diff['from']} -> {diff['to']}")
         
-        return "\\n".join(report_lines)
+        return "\n".join(report_lines)
+
+    def generate_rollback_statements(self, table_name: str, differences: List[Dict[str, Any]]) -> List[str]:
+        """Generate rollback ALTER TABLE statements from a list of differences."""
+        if not differences:
+            return []
+        
+        statements = []
+        alter_clauses = []
+        separate_statements = []
+        
+        # Generate reverse operations for rollback
+        for diff in reversed(differences):  # Reverse order for rollback
+            change_type = diff['type']
+            
+            # Reverse operations for rollback
+            if change_type == ChangeType.ADD_COLUMN:
+                # Rollback: DROP the column that was added
+                clause = f"DROP COLUMN `{diff['column'].name}`"
+                alter_clauses.append(clause)
+            
+            elif change_type == ChangeType.DROP_COLUMN:
+                # Rollback: ADD the column that was dropped
+                clause = self._generate_add_column_clause(diff['column'])
+                if clause:
+                    alter_clauses.append(clause)
+            
+            elif change_type == ChangeType.MODIFY_COLUMN:
+                # Rollback: MODIFY back to original column definition
+                clause = self._generate_modify_column_clause(diff['column_name'], diff['from'])
+                if clause:
+                    alter_clauses.append(clause)
+            
+            elif change_type == ChangeType.ADD_INDEX:
+                # Rollback: DROP the index that was added
+                stmt = self._generate_drop_index_statement(table_name, diff['index'])
+                if stmt:
+                    separate_statements.append(stmt)
+            
+            elif change_type == ChangeType.DROP_INDEX:
+                # Rollback: ADD the index that was dropped
+                stmt = self._generate_add_index_statement(table_name, diff['index'])
+                if stmt:
+                    separate_statements.append(stmt)
+            
+            elif change_type == ChangeType.ADD_FOREIGN_KEY:
+                # Rollback: DROP the foreign key that was added
+                stmt = self._generate_drop_foreign_key_statement(table_name, diff['foreign_key'])
+                if stmt:
+                    separate_statements.append(stmt)
+            
+            elif change_type == ChangeType.DROP_FOREIGN_KEY:
+                # Rollback: ADD the foreign key that was dropped
+                stmt = self._generate_add_foreign_key_statement(table_name, diff['foreign_key'])
+                if stmt:
+                    separate_statements.append(stmt)
+        
+        # Combine column/table changes into single ALTER TABLE statement
+        if alter_clauses:
+            alter_sql = f"ALTER TABLE `{self.dest_schema}`.`{table_name}`\n  " + ",\n  ".join(alter_clauses)
+            statements.append(alter_sql)
+        
+        # Add separate index statements
+        statements.extend(separate_statements)
+        
+        return statements
+    
+    def generate_stored_object_migration(self, object_type: str, obj_name: str, 
+                                       source_ddl: str, dest_ddl: str = None) -> List[str]:
+        """Generate migration statements for stored procedures, functions, and triggers.
+        
+        Uses the drop-and-recreate approach as recommended for these object types.
+        """
+        statements = []
+        
+        # Generate DROP statement if object exists in destination
+        if dest_ddl:
+            drop_stmt = self._generate_drop_statement(object_type, obj_name)
+            if drop_stmt:
+                statements.append(drop_stmt)
+        
+        # Generate CREATE statement from source
+        if source_ddl:
+            create_stmt = self._adapt_ddl_for_destination(source_ddl)
+            if create_stmt:
+                statements.append(create_stmt + ";")
+        
+        return statements
+    
+    def generate_stored_object_rollback(self, object_type: str, obj_name: str, 
+                                      source_ddl: str, dest_ddl: str = None) -> List[str]:
+        """Generate rollback statements for stored procedures, functions, and triggers.
+        
+        For rollback, drop the object that was created/modified and recreate the original.
+        """
+        statements = []
+        
+        # Drop the current object (that was created from source)
+        drop_stmt = self._generate_drop_statement(object_type, obj_name)
+        if drop_stmt:
+            statements.append(drop_stmt)
+        
+        # Recreate the original object if it existed in destination
+        if dest_ddl:
+            create_stmt = self._adapt_ddl_for_destination(dest_ddl)
+            if create_stmt:
+                statements.append(create_stmt + ";")
+        
+        return statements
+    
+    def _generate_drop_statement(self, object_type: str, obj_name: str) -> str:
+        """Generate DROP statement for database objects."""
+        if object_type == 'functions':
+            return f"DROP FUNCTION IF EXISTS `{self.dest_schema}`.`{obj_name}`;"
+        elif object_type == 'procedures':
+            return f"DROP PROCEDURE IF EXISTS `{self.dest_schema}`.`{obj_name}`;"
+        elif object_type == 'triggers':
+            return f"DROP TRIGGER IF EXISTS `{self.dest_schema}`.`{obj_name}`;"
+        elif object_type == 'events':
+            return f"DROP EVENT IF EXISTS `{self.dest_schema}`.`{obj_name}`;"
+        return ""
+    
+    def _adapt_ddl_for_destination(self, ddl: str) -> str:
+        """Adapt DDL for destination schema."""
+        if not ddl:
+            return ""
+        
+        # Remove trailing semicolon if present
+        adapted_ddl = ddl.strip()
+        if adapted_ddl.endswith(';'):
+            adapted_ddl = adapted_ddl[:-1]
+        
+        return adapted_ddl

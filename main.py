@@ -9,6 +9,7 @@ import logging
 import sys
 import time
 from pathlib import Path
+from typing import Dict, List
 from typing import Dict, Any, Optional
 
 from database import DatabaseManager, DatabaseConfig
@@ -226,6 +227,61 @@ def visualize_mode(config: DDLWizardConfig, args: argparse.Namespace):
     logger.info(f"Schema visualizations generated in {output_dir}")
 
 
+def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_objects: Dict, alter_generator) -> List[str]:
+    """Generate detailed rollback SQL for table structural changes."""
+    rollback_lines = []
+    
+    if 'tables' not in comparison:
+        rollback_lines.append("-- DEBUG: No tables in comparison")
+        return rollback_lines
+    
+    # Add header comment
+    rollback_lines.append("-- Detailed rollback for structural changes")
+    rollback_lines.append("")
+    
+    # Debug: log what we have
+    tables_comparison = comparison['tables']
+    rollback_lines.append(f"-- DEBUG: in_both tables: {list(tables_comparison.get('in_both', []))}")
+    rollback_lines.append(f"-- DEBUG: source_objects keys: {list(tables_comparison.get('source_objects', {}).keys())}")
+    rollback_lines.append(f"-- DEBUG: dest_objects keys: {list(tables_comparison.get('dest_objects', {}).keys())}")
+    rollback_lines.append("")
+    
+    # Process tables that exist in both and may have structural differences
+    for table_name in comparison['tables'].get('in_both', []):
+        # Get source and destination DDL
+        source_table_data = comparison['tables']['source_objects'].get(table_name)
+        dest_table_data = comparison['tables']['dest_objects'].get(table_name)
+        
+        rollback_lines.append(f"-- DEBUG: Processing table {table_name}")
+        rollback_lines.append(f"-- DEBUG: source_table_data exists: {source_table_data is not None}")
+        rollback_lines.append(f"-- DEBUG: dest_table_data exists: {dest_table_data is not None}")
+        
+        if source_table_data and dest_table_data:
+            source_ddl = source_table_data.get('ddl', '')
+            dest_ddl = dest_table_data.get('ddl', '')
+            
+            rollback_lines.append(f"-- DEBUG: source_ddl length: {len(source_ddl)}")
+            rollback_lines.append(f"-- DEBUG: dest_ddl length: {len(dest_ddl)}")
+            
+            if source_ddl and dest_ddl:
+                # Use the comparator to analyze table differences
+                from schema_comparator import SchemaComparator
+                temp_comparator = SchemaComparator()
+                differences = temp_comparator.analyze_table_differences(table_name, source_ddl, dest_ddl)
+                
+                rollback_lines.append(f"-- DEBUG: differences found: {len(differences) if differences else 0}")
+                
+                if differences:
+                    # Generate rollback statements for this table
+                    rollback_statements = alter_generator.generate_rollback_statements(table_name, differences)
+                    rollback_lines.append(f"-- DEBUG: rollback_statements generated: {len(rollback_statements)}")
+                    for stmt in rollback_statements:
+                        rollback_lines.append(stmt + ";")
+                    rollback_lines.append("")
+    
+    return rollback_lines
+
+
 def history_mode(config: DDLWizardConfig, args: argparse.Namespace):
     """Show migration history."""
     logger.info("Showing migration history...")
@@ -392,7 +448,12 @@ def compare_mode(config: DDLWizardConfig, args: argparse.Namespace):
     
     # Generate rollback SQL
     rollback_operations = dependency_manager.generate_rollback_operations(ordered_operations)
-    rollback_sql = "\n".join([op['sql'] for op in rollback_operations])
+    rollback_sql_lines = [op['sql'] for op in rollback_operations]
+    
+    # Add detailed rollback for table structural changes
+    rollback_sql_lines.extend(generate_detailed_rollback_sql(comparison, source_objects, dest_objects, alter_generator))
+    
+    rollback_sql = "\n".join(rollback_sql_lines)
     
     # Write files
     migration_file.write_text(migration_sql)

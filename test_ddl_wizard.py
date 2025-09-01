@@ -11,7 +11,7 @@ import time
 import logging
 import subprocess
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 # Add the current directory to Python path so we can import DDL Wizard modules
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -479,27 +479,134 @@ class DDLWizardTester:
             conn = pymysql.connect(**target_config)
             cursor = conn.cursor()
             
-            # Split SQL content into individual statements
-            statements = [stmt.strip() for stmt in sql_content.split(';') if stmt.strip()]
-            
-            for statement in statements:
-                if statement:
-                    try:
-                        cursor.execute(statement)
-                        conn.commit()
-                    except Exception as e:
-                        self.logger.warning(f"⚠️  SQL execution warning: {e}")
-                        self.logger.warning(f"Statement: {statement[:100]}...")
-            
-            cursor.close()
-            conn.close()
-            
-            self.logger.info("✅ SQL file executed successfully")
-            return True
+            try:
+                # Improved SQL parsing: handle comments and multi-line statements
+                sql_content = self._clean_sql_content(sql_content)
+                statements = self._parse_sql_statements(sql_content)
+                
+                executed_count = 0
+                failed_count = 0
+                
+                for i, statement in enumerate(statements):
+                    if statement.strip():
+                        try:
+                            self.logger.debug(f"Executing statement {i+1}/{len(statements)}: {statement[:100]}...")
+                            cursor.execute(statement)
+                            conn.commit()
+                            executed_count += 1
+                        except Exception as e:
+                            failed_count += 1
+                            # Log as warning but continue execution
+                            self.logger.warning(f"⚠️  SQL execution warning (statement {i+1}): {e}")
+                            if len(statement) <= 200:
+                                self.logger.warning(f"Statement: {statement}")
+                            else:
+                                self.logger.warning(f"Statement: {statement[:100]}...{statement[-50:]}")
+                
+                self.logger.info(f"✅ SQL file executed: {executed_count} statements succeeded, {failed_count} failed")
+                # Consider it successful if at least 50% of statements executed
+                return failed_count == 0 or (executed_count > failed_count)
+                
+            finally:
+                cursor.close()
+                conn.close()
             
         except Exception as e:
             self.logger.error(f"❌ Error executing SQL file {sql_file_path}: {e}")
             return False
+
+    def _clean_sql_content(self, sql_content: str) -> str:
+        """Clean SQL content by removing problematic formatting."""
+        # Remove comment-only lines that might interfere with parsing
+        lines = []
+        for line in sql_content.split('\n'):
+            line = line.strip()
+            # Skip empty lines and comment-only lines
+            if line and not line.startswith('--'):
+                lines.append(line)
+        return '\n'.join(lines)
+
+    def _parse_sql_statements(self, sql_content: str) -> List[str]:
+        """Parse SQL content into individual executable statements."""
+        statements = []
+        lines = sql_content.split('\n')
+        i = 0
+        current_delimiter = ';'
+        
+        while i < len(lines):
+            line = lines[i].strip()
+            
+            if not line:
+                i += 1
+                continue
+            
+            # Skip comment lines
+            if line.startswith('--'):
+                i += 1
+                continue
+            
+            # Handle DELIMITER commands (skip them, but update delimiter)
+            if line.upper().startswith('DELIMITER'):
+                # Extract the new delimiter
+                parts = line.split()
+                if len(parts) > 1:
+                    current_delimiter = parts[1]
+                i += 1
+                continue
+            
+            # For $$ delimited blocks (stored procedures/functions/triggers)
+            if current_delimiter == '$$':
+                # Collect everything until we hit the delimiter
+                current_statement = [line]
+                i += 1
+                
+                while i < len(lines):
+                    next_line = lines[i].strip()
+                    if next_line:
+                        if next_line.endswith('$$'):
+                            # Remove the $$ and add to statement
+                            clean_line = next_line[:-2].strip()
+                            if clean_line:
+                                current_statement.append(clean_line)
+                            break
+                        else:
+                            current_statement.append(next_line)
+                    i += 1
+                
+                if current_statement:
+                    full_stmt = '\n'.join(current_statement)
+                    statements.append(full_stmt)
+                
+                # Reset delimiter back to semicolon after stored object
+                current_delimiter = ';'
+                i += 1
+                continue
+            
+            # Handle regular statements ending with semicolon
+            if line.endswith(';'):
+                statements.append(line)
+                i += 1
+                continue
+            
+            # For multi-line statements, collect until we find a terminator
+            current_statement = [line]
+            i += 1
+            
+            while i < len(lines):
+                next_line = lines[i].strip()
+                if next_line:
+                    current_statement.append(next_line)
+                    if next_line.endswith(current_delimiter):
+                        break
+                i += 1
+            
+            if current_statement:
+                full_stmt = '\n'.join(current_statement)
+                statements.append(full_stmt)
+            
+            i += 1
+        
+        return [stmt.strip() for stmt in statements if stmt.strip()]
 
     def run_comparison_step(self, step_name: str, output_suffix: str = "") -> bool:
         """Run DDL Wizard comparison and save results with optional suffix."""
@@ -737,7 +844,7 @@ class DDLWizardTester:
                 conn = pymysql.connect(**conn_config)
                 cursor = conn.cursor()
                 
-                cursor.execute(f"DROP DATABASE IF EXISTS `{database}`")
+                cursor.execute(f"#DROP DATABASE IF EXISTS `{database}`")
                 conn.commit()
                 conn.close()
                 
@@ -757,6 +864,15 @@ class DDLWizardTester:
         print("  4️⃣  Apply rollback to destination")
         print("  5️⃣  Verify differences match initial state")
         print("="*60)
+        print()
+        print("🔗 Connection Configuration:")
+        print(f"   📡 Source:      {self.source_config['user']}@{self.source_config['host']}:{self.source_config['port']}/{self.source_config['database']}")
+        print(f"   📡 Destination: {self.dest_config['user']}@{self.dest_config['host']}:{self.dest_config['port']}/{self.dest_config['database']}")
+        if self.source_config['host'] != self.dest_config['host'] or self.source_config['port'] != self.dest_config['port']:
+            print("   ✨ Testing cross-server migration capability!")
+        else:
+            print("   🏠 Testing same-server, different schemas")
+        print()
         
         round_trip_results = {
             'initial_detection_passed': False,
@@ -851,10 +967,19 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description="DDL Wizard Test Suite")
-    parser.add_argument('--host', default='localhost', help='Database host')
-    parser.add_argument('--port', type=int, default=3306, help='Database port')
-    parser.add_argument('--user', default='root', help='Database user')
-    parser.add_argument('--password', default='password', help='Database password')
+    
+    # Source database connection
+    parser.add_argument('--host', default='localhost', help='Source database host')
+    parser.add_argument('--port', type=int, default=3306, help='Source database port')
+    parser.add_argument('--user', default='root', help='Source database user')
+    parser.add_argument('--password', default='password', help='Source database password')
+    
+    # Destination database connection (optional, defaults to source if not specified)
+    parser.add_argument('--dest-host', help='Destination database host (defaults to source host)')
+    parser.add_argument('--dest-port', type=int, help='Destination database port (defaults to source port)')
+    parser.add_argument('--dest-user', help='Destination database user (defaults to source user)')
+    parser.add_argument('--dest-password', help='Destination database password (defaults to source password)')
+    
     parser.add_argument('--no-cleanup', action='store_true', help='Skip database cleanup')
     
     args = parser.parse_args()
@@ -862,12 +987,17 @@ def main():
     # Create tester instance
     tester = DDLWizardTester()
     
-    # Update connection configs
-    for config in [tester.source_config, tester.dest_config]:
-        config['host'] = args.host
-        config['port'] = args.port
-        config['user'] = args.user
-        config['password'] = args.password
+    # Update source connection config
+    tester.source_config['host'] = args.host
+    tester.source_config['port'] = args.port
+    tester.source_config['user'] = args.user
+    tester.source_config['password'] = args.password
+    
+    # Update destination connection config (use source as defaults)
+    tester.dest_config['host'] = args.dest_host if args.dest_host else args.host
+    tester.dest_config['port'] = args.dest_port if args.dest_port else args.port
+    tester.dest_config['user'] = args.dest_user if args.dest_user else args.user
+    tester.dest_config['password'] = args.dest_password if args.dest_password else args.password
     
     # Run the test suite
     tester.run_full_test_suite(cleanup=not args.no_cleanup)

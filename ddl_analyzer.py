@@ -194,8 +194,9 @@ class DDLAnalyzer:
     
     def _parse_column_definition(self, line: str, position: int) -> Optional[ColumnDefinition]:
         """Parse a single column definition line."""
-        # Basic column pattern: `column_name` data_type [options]
-        match = re.match(r'`?([^`\s]+)`?\s+([^,\s]+(?:\([^)]*\))?)', line, re.IGNORECASE)
+        # Enhanced column pattern to properly capture data types with parentheses and precision
+        # Pattern explanation: `column_name` data_type(params) [options]
+        match = re.match(r'`?([^`\s]+)`?\s+([A-Za-z]+(?:\([^)]+\))?)', line, re.IGNORECASE)
         if not match:
             return None
         

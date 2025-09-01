@@ -169,7 +169,8 @@ class SchemaComparator:
             if source_ddl:
                 create_sql = self._adapt_ddl_for_destination(source_ddl, dest_schema)
                 lines.append(f"-- Create {object_type[:-1]} from source")
-                lines.append(create_sql + ";")
+                # Don't add extra semicolon - _adapt_ddl_for_destination handles it
+                lines.append(create_sql)
                 lines.append("")
         
         # Handle objects that exist in both but are different
@@ -207,7 +208,8 @@ class SchemaComparator:
                 
                 if source_ddl:
                     create_sql = self._adapt_ddl_for_destination(source_ddl, dest_schema)
-                    lines.append(create_sql + ";")
+                    # Don't add extra semicolon - _adapt_ddl_for_destination handles it
+                    lines.append(create_sql)
                     lines.append("")
         
         lines.append("")
@@ -236,21 +238,36 @@ class SchemaComparator:
         return ""
     
     def _adapt_ddl_for_destination(self, ddl: str, dest_schema: str) -> str:
-        """Adapt DDL for destination schema."""
-        # Basic schema replacement - might need more sophisticated logic
-        # This is a simplified version
+        """Adapt DDL for destination schema with proper delimiter handling."""
         if not ddl:
             return ""
         
-        # Remove any existing schema qualifiers and replace with destination schema
-        # This is a basic implementation - production code would need more robust parsing
         adapted_ddl = ddl.strip()
         
-        # Remove trailing semicolon if present
-        if adapted_ddl.endswith(';'):
-            adapted_ddl = adapted_ddl[:-1]
+        # Check if this is a stored procedure, function, or trigger
+        ddl_upper = adapted_ddl.upper()
+        # Use regex to handle DEFINER clauses between CREATE and object type
+        import re
+        is_stored_object = bool(re.search(r'CREATE\s+(?:DEFINER[^)]*\)?\s+)?(FUNCTION|PROCEDURE|TRIGGER)', ddl_upper))
         
-        return adapted_ddl
+        if is_stored_object:
+            # For stored procedures, functions, and triggers, we need to:
+            # 1. Ensure proper semicolons within the body
+            # 2. Wrap with DELIMITER commands
+            
+            # For stored objects, we don't modify semicolons - just wrap with DELIMITER
+            # Remove trailing semicolon if present (will be replaced with $$)
+            if adapted_ddl.endswith(';'):
+                adapted_ddl = adapted_ddl[:-1]
+            
+            # Wrap with DELIMITER commands and add $$ terminator
+            result = f"DELIMITER $$\n{adapted_ddl}$$\nDELIMITER ;"
+            return result
+        else:
+            # For regular DDL (tables, etc.), ensure proper semicolon
+            if not adapted_ddl.endswith(';'):
+                adapted_ddl += ';'
+            return adapted_ddl
     
     def _get_timestamp(self) -> str:
         """Get current timestamp for migration script."""
