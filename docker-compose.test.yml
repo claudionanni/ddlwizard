@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  # Source database (MariaDB)
+  mariadb-source:
+    image: mariadb:10.11
+    container_name: ddl_test_source
+    environment:
+      MYSQL_ROOT_PASSWORD: test_password
+      MYSQL_DATABASE: test_source
+      MYSQL_USER: test_user
+      MYSQL_PASSWORD: test_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - source_data:/var/lib/mysql
+      - ./test_data/source_init.sql:/docker-entrypoint-initdb.d/init.sql
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Destination database (MySQL)
+  mysql-dest:
+    image: mysql:8.0
+    container_name: ddl_test_dest
+    environment:
+      MYSQL_ROOT_PASSWORD: test_password
+      MYSQL_DATABASE: test_dest
+      MYSQL_USER: test_user
+      MYSQL_PASSWORD: test_password
+    ports:
+      - "3307:3306"
+    volumes:
+      - dest_data:/var/lib/mysql
+      - ./test_data/dest_init.sql:/docker-entrypoint-initdb.d/init.sql
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-ptest_password"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # DDL Wizard test runner
+  ddl-wizard-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: ddl_wizard_test
+    depends_on:
+      mariadb-source:
+        condition: service_healthy
+      mysql-dest:
+        condition: service_healthy
+    environment:
+      SOURCE_HOST: mariadb-source
+      SOURCE_PORT: 3306
+      SOURCE_USER: root
+      SOURCE_PASSWORD: test_password
+      DEST_HOST: mysql-dest
+      DEST_PORT: 3306
+      DEST_USER: root
+      DEST_PASSWORD: test_password
+    volumes:
+      - ./test_output:/app/test_output
+      - ./test_logs:/app/logs
+    command: >
+      sh -c "
+        echo 'Waiting for databases to be ready...' &&
+        sleep 10 &&
+        echo 'Running DDL Wizard tests...' &&
+        python test_ddl_wizard.py --host mariadb-source --user root --password test_password &&
+        echo 'Tests completed!'
+      "
+
+volumes:
+  source_data:
+  dest_data:
