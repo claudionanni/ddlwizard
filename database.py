@@ -223,3 +223,25 @@ class DatabaseManager:
             'triggers': self.get_triggers(),
             'events': self.get_events()
         }
+    
+    def get_all_objects_with_ddl(self) -> Dict[str, List[Dict[str, str]]]:
+        """Get all database objects organized by type, including DDL."""
+        # Get basic table info first
+        tables = self.get_tables()
+        # Add DDL to each table
+        for table in tables:
+            table['ddl'] = self.get_table_ddl(table['name'])
+        
+        # Get other objects (they already include DDL)
+        functions = self.get_functions()
+        procedures = self.get_procedures()
+        triggers = self.get_triggers()
+        events = self.get_events()
+        
+        return {
+            'tables': tables,
+            'functions': functions,
+            'procedures': procedures,
+            'triggers': triggers,
+            'events': events
+        }

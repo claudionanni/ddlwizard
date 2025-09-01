@@ -227,57 +227,143 @@ def visualize_mode(config: DDLWizardConfig, args: argparse.Namespace):
     logger.info(f"Schema visualizations generated in {output_dir}")
 
 
-def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_objects: Dict, alter_generator) -> List[str]:
-    """Generate detailed rollback SQL for table structural changes."""
+def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_objects: Dict, alter_generator, get_source_ddl, get_dest_ddl) -> List[str]:
+    """Generate detailed rollback SQL for all schema changes."""
     rollback_lines = []
     
-    if 'tables' not in comparison:
-        rollback_lines.append("-- DEBUG: No tables in comparison")
-        return rollback_lines
-    
     # Add header comment
-    rollback_lines.append("-- Detailed rollback for structural changes")
+    rollback_lines.append("-- Detailed rollback for all schema changes")
     rollback_lines.append("")
     
-    # Debug: log what we have
-    tables_comparison = comparison['tables']
-    rollback_lines.append(f"-- DEBUG: in_both tables: {list(tables_comparison.get('in_both', []))}")
-    rollback_lines.append(f"-- DEBUG: source_objects keys: {list(tables_comparison.get('source_objects', {}).keys())}")
-    rollback_lines.append(f"-- DEBUG: dest_objects keys: {list(tables_comparison.get('dest_objects', {}).keys())}")
+    # Add header comment
+    rollback_lines.append("-- Detailed rollback for all schema changes")
     rollback_lines.append("")
     
     # Process tables that exist in both and may have structural differences
-    for table_name in comparison['tables'].get('in_both', []):
-        # Get source and destination DDL
-        source_table_data = comparison['tables']['source_objects'].get(table_name)
-        dest_table_data = comparison['tables']['dest_objects'].get(table_name)
+    if 'tables' in comparison:
+        tables_comparison = comparison['tables']
+        rollback_lines.append(f"-- DEBUG: in_both tables: {list(tables_comparison.get('in_both', []))}")
+        rollback_lines.append(f"-- DEBUG: source_objects keys: {list(tables_comparison.get('source_objects', {}).keys())}")
+        rollback_lines.append(f"-- DEBUG: dest_objects keys: {list(tables_comparison.get('dest_objects', {}).keys())}")
+        rollback_lines.append("")
         
-        rollback_lines.append(f"-- DEBUG: Processing table {table_name}")
-        rollback_lines.append(f"-- DEBUG: source_table_data exists: {source_table_data is not None}")
-        rollback_lines.append(f"-- DEBUG: dest_table_data exists: {dest_table_data is not None}")
+        for table_name in comparison['tables'].get('in_both', []):
+            # Get DDL for this table from both databases
+            rollback_lines.append(f"-- DEBUG: Processing table {table_name}")
+            
+            try:
+                # Fetch DDL directly from the database connections
+                source_ddl = get_source_ddl('tables', table_name)
+                dest_ddl = get_dest_ddl('tables', table_name) 
+                
+                rollback_lines.append(f"-- DEBUG: source_ddl length: {len(source_ddl) if source_ddl else 0}")
+                rollback_lines.append(f"-- DEBUG: dest_ddl length: {len(dest_ddl) if dest_ddl else 0}")
+                
+                if source_ddl and dest_ddl:
+                    # Use the comparator to analyze table differences
+                    from schema_comparator import SchemaComparator
+                    temp_comparator = SchemaComparator()
+                    differences = temp_comparator.analyze_table_differences(table_name, source_ddl, dest_ddl)
+                    
+                    rollback_lines.append(f"-- DEBUG: differences found: {len(differences) if differences else 0}")
+                    
+                    if differences:
+                        # Generate rollback statements for this table
+                        rollback_statements = alter_generator.generate_rollback_statements(table_name, differences)
+                        rollback_lines.append(f"-- DEBUG: rollback_statements generated: {len(rollback_statements)}")
+                        for stmt in rollback_statements:
+                            rollback_lines.append(stmt + ";")
+                        rollback_lines.append("")
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to process table {table_name}: {str(e)}")
+                continue
+    
+    # Process procedures that exist in both and may have differences
+    if 'procedures' in comparison:
+        procedures_comparison = comparison['procedures']
+        rollback_lines.append(f"-- DEBUG: in_both procedures: {list(procedures_comparison.get('in_both', []))}")
         
-        if source_table_data and dest_table_data:
-            source_ddl = source_table_data.get('ddl', '')
-            dest_ddl = dest_table_data.get('ddl', '')
+        # Only process procedures that have actual differences
+        procedures_with_differences = procedures_comparison.get('source_objects', {})
+        dest_procedures = procedures_comparison.get('dest_objects', {})
+        
+        for proc_name in procedures_comparison.get('in_both', []):
+            rollback_lines.append(f"-- DEBUG: Processing procedure {proc_name}")
             
-            rollback_lines.append(f"-- DEBUG: source_ddl length: {len(source_ddl)}")
-            rollback_lines.append(f"-- DEBUG: dest_ddl length: {len(dest_ddl)}")
-            
-            if source_ddl and dest_ddl:
-                # Use the comparator to analyze table differences
-                from schema_comparator import SchemaComparator
-                temp_comparator = SchemaComparator()
-                differences = temp_comparator.analyze_table_differences(table_name, source_ddl, dest_ddl)
+            try:
+                # Check if this procedure has differences by comparing the comparison objects
+                source_proc = procedures_with_differences.get(proc_name, {})
+                dest_proc = dest_procedures.get(proc_name, {})
                 
-                rollback_lines.append(f"-- DEBUG: differences found: {len(differences) if differences else 0}")
+                # Get DDL for both versions
+                source_ddl = get_source_ddl('procedures', proc_name)
+                dest_ddl = get_dest_ddl('procedures', proc_name)
                 
-                if differences:
-                    # Generate rollback statements for this table
-                    rollback_statements = alter_generator.generate_rollback_statements(table_name, differences)
-                    rollback_lines.append(f"-- DEBUG: rollback_statements generated: {len(rollback_statements)}")
-                    for stmt in rollback_statements:
-                        rollback_lines.append(stmt + ";")
+                rollback_lines.append(f"-- DEBUG: source_ddl length: {len(source_ddl) if source_ddl else 0}")
+                rollback_lines.append(f"-- DEBUG: dest_ddl length: {len(dest_ddl) if dest_ddl else 0}")
+                
+                # Only generate rollback if there are actual differences in the comparison
+                # Check if this procedure appears in the migration (has differences)
+                # Use normalized comparison to avoid whitespace differences
+                source_normalized = ' '.join(source_ddl.split()) if source_ddl else ''
+                dest_normalized = ' '.join(dest_ddl.split()) if dest_ddl else ''
+                
+                if source_normalized != dest_normalized and dest_ddl:
+                    # Additional check: verify this procedure was actually modified in the migration
+                    # by checking if it has a 'has_differences' flag or similar indication
+                    rollback_lines.append(f"-- Rollback procedure: {proc_name}")
+                    rollback_lines.append(f"DROP PROCEDURE IF EXISTS `{proc_name}`;")
+                    # Add the destination's original DDL to restore it
+                    rollback_lines.append(dest_ddl)
                     rollback_lines.append("")
+                else:
+                    rollback_lines.append(f"-- No changes needed for procedure {proc_name}")
+                    
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to process procedure {proc_name}: {str(e)}")
+                continue
+    
+    # Process functions that exist in both and may have differences  
+    if 'functions' in comparison:
+        functions_comparison = comparison['functions']
+        rollback_lines.append(f"-- DEBUG: in_both functions: {list(functions_comparison.get('in_both', []))}")
+        
+        # Only process functions that have actual differences
+        functions_with_differences = functions_comparison.get('source_objects', {})
+        dest_functions = functions_comparison.get('dest_objects', {})
+        
+        for func_name in functions_comparison.get('in_both', []):
+            rollback_lines.append(f"-- DEBUG: Processing function {func_name}")
+            
+            try:
+                # Check if this function has differences by comparing the comparison objects
+                source_func = functions_with_differences.get(func_name, {})
+                dest_func = dest_functions.get(func_name, {})
+                
+                # Get DDL for both versions
+                source_ddl = get_source_ddl('functions', func_name)
+                dest_ddl = get_dest_ddl('functions', func_name)
+                
+                rollback_lines.append(f"-- DEBUG: source_ddl length: {len(source_ddl) if source_ddl else 0}")
+                rollback_lines.append(f"-- DEBUG: dest_ddl length: {len(dest_ddl) if dest_ddl else 0}")
+                
+                # Only generate rollback if there are actual differences
+                # Use normalized comparison to avoid whitespace differences
+                source_normalized = ' '.join(source_ddl.split()) if source_ddl else ''
+                dest_normalized = ' '.join(dest_ddl.split()) if dest_ddl else ''
+                
+                if source_normalized != dest_normalized and dest_ddl:
+                    rollback_lines.append(f"-- Rollback function: {func_name}")
+                    rollback_lines.append(f"DROP FUNCTION IF EXISTS `{func_name}`;")
+                    # Add the destination's original DDL to restore it
+                    rollback_lines.append(dest_ddl)
+                    rollback_lines.append("")
+                else:
+                    rollback_lines.append(f"-- No changes needed for function {func_name}")
+                    
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to process function {func_name}: {str(e)}")
+                continue
     
     return rollback_lines
 
@@ -362,8 +448,8 @@ def compare_mode(config: DDLWizardConfig, args: argparse.Namespace):
     
     # Extract DDL objects
     logger.info("Extracting DDL objects...")
-    source_objects = source_db.get_all_objects()
-    dest_objects = dest_db.get_all_objects()
+    source_objects = source_db.get_all_objects_with_ddl()
+    dest_objects = dest_db.get_all_objects_with_ddl()
     
     def get_source_ddl(object_type: str, object_name: str) -> str:
         if object_type == 'tables':
@@ -451,7 +537,7 @@ def compare_mode(config: DDLWizardConfig, args: argparse.Namespace):
     rollback_sql_lines = [op['sql'] for op in rollback_operations]
     
     # Add detailed rollback for table structural changes
-    rollback_sql_lines.extend(generate_detailed_rollback_sql(comparison, source_objects, dest_objects, alter_generator))
+    rollback_sql_lines.extend(generate_detailed_rollback_sql(comparison, source_objects, dest_objects, alter_generator, get_source_ddl, get_dest_ddl))
     
     rollback_sql = "\n".join(rollback_sql_lines)
     
