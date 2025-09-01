@@ -1,6 +1,7 @@
 # 🧙‍♂️ DDL Wizard - MariaDB Schema Management Tool
 
-A comprehensive Python tool for MariaDB/MySQL schema management, version control, and automated migration generation. DDL Wizard provides professional-grade features for safe, reliable database schema evolution.
+A comprehensivepython ddl_wizard.py --interactive 
+  --source-host localhost --source-user root --source-password password --source-schema mydbython tool for MariaDB/MySQL schema management, version control, and automated migration generation. DDL Wizard provides professional-grade features for safe, reliable database schema evolution.
 
 ## 🚀 Features
 
@@ -41,7 +42,7 @@ pip install -r requirements.txt
 
 3. Verify installation:
 ```bash
-python main.py --help
+python ddl_wizard.py --help
 ```
 
 ## 🎯 Quick Start
@@ -50,17 +51,16 @@ python main.py --help
 Compare two schemas and generate migration SQL:
 
 ```bash
-python main.py 
-  --source-host localhost --source-user root --source-password password --source-schema source_db 
-  --dest-host localhost --dest-user root --dest-password password --dest-schema dest_db 
-  --output-dir ./migration_output
+python ddl_wizard.py 
+  --source-host localhost --source-user root --source-password password --source-schema production 
+  --dest-host localhost --dest-user root --dest-password password --dest-schema staging
 ```
 
 ### Using Configuration Files
 Create a configuration file (`config.yaml`) and use profiles:
 
 ```bash
-python main.py --config ddl_wizard_config.yaml --profile development
+python ddl_wizard.py --config ddl_wizard_config.yaml --profile development
 ```
 
 ### Interactive Mode
@@ -77,25 +77,25 @@ python main.py --interactive
 ### Compare Mode (Default)
 Compares schemas and generates migration SQL:
 ```bash
-python main.py --mode compare [database options]
+python ddl_wizard.py --mode compare [database options]
 ```
 
 ### Extract Mode
 Extracts DDL objects from source database only:
 ```bash
-python main.py --mode extract --source-host HOST --source-user USER --source-password PASS --source-schema SCHEMA
+python ddl_wizard.py --mode extract --source-host HOST --source-user USER --source-password PASS --source-schema SCHEMA
 ```
 
 ### Visualize Mode
 Generates schema documentation and ER diagrams:
 ```bash
-python main.py --mode visualize --source-host HOST --source-user USER --source-password PASS --source-schema SCHEMA
+python ddl_wizard.py --mode visualize --source-host HOST --source-user USER --source-password PASS --source-schema SCHEMA
 ```
 
 ### History Mode
 Shows migration execution history:
 ```bash
-python main.py --mode history
+python ddl_wizard.py --mode history
 ```
 
 ## 📁 Configuration
@@ -157,7 +157,7 @@ Generate comprehensive schema documentation:
 
 ### Example Output
 ```bash
-python main.py --mode visualize --source-host localhost --source-user root --source-password password --source-schema mydb
+python ddl_wizard.py --mode visualize --source-host localhost --source-user root --source-password password --source-schema mydb
 ```
 
 Generates:
@@ -179,7 +179,7 @@ Track all migration executions with detailed logging:
 
 ### View History
 ```bash
-python main.py --mode history
+python ddl_wizard.py --mode history
 ```
 
 ## 🎨 Interactive Mode

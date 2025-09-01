@@ -55,10 +55,10 @@ pip install -r requirements-dev.txt
 python -m pytest tests/
 
 # Manual testing
-python main.py --help
+python ddl_wizard.py --help
 
 # Test with sample databases
-python main.py --mode extract --source-host localhost --source-user test --source-password test --source-schema test_db
+python ddl_wizard.py --mode extract --source-host localhost --source-user test --source-password test --source-schema test_db
 ```
 
 ## 📝 Coding Standards

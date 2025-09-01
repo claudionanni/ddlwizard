@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     import pymysql
     from database import DatabaseManager
-    from main import main as ddl_wizard_main
+    from ddl_wizard import main as ddl_wizard_main
 except ImportError as e:
     print(f"❌ Error importing required modules: {e}")
     print("💡 Make sure you have installed requirements: pip install -r requirements.txt")
@@ -637,7 +637,7 @@ class DDLWizardTester:
             
             try:
                 # Set sys.argv for DDL Wizard
-                sys.argv = ['main.py'] + test_args
+                sys.argv = ['ddl_wizard.py'] + test_args
                 
                 # Run DDL Wizard
                 result = ddl_wizard_main()
