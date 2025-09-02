@@ -54,7 +54,7 @@ class SchemaComparator:
         source_col_names = set(source_columns.keys())
         dest_col_names = set(dest_columns.keys())
         
-        # Columns only in source (need to be added to dest)
+        # Columns only in source (need to be added to dest to match source)
         for col_name in source_col_names - dest_col_names:
             differences.append({
                 'type': ChangeType.ADD_COLUMN.value,
@@ -63,7 +63,7 @@ class SchemaComparator:
                 'description': f"Add column '{col_name}'"
             })
         
-        # Columns only in dest (need to be removed from dest)
+        # Columns only in dest (need to be removed from dest to match source)
         for col_name in dest_col_names - source_col_names:
             differences.append({
                 'type': ChangeType.REMOVE_COLUMN.value,
