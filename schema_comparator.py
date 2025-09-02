@@ -1,111 +1,299 @@
 """
-Schema comparison and migration SQL generation for DDL Wizard.
+Schema Comparator for DDL Wizard.
+Analyzes differences between source and destination schemas.
 """
 
-import logging
-from typing import Dict, List, Set, Tuple, Optional
-from difflib import unified_diff
-from pathlib import Path
-from ddl_analyzer import DDLAnalyzer, TableStructure
-from alter_generator import AlterStatementGenerator
+import re
+from datetime import datetime
+from enum import Enum
+from typing import List, Dict, Any, Optional
 
-logger = logging.getLogger(__name__)
+
+class ChangeType(Enum):
+    """Types of changes that can be detected in schema comparison."""
+    ADD_COLUMN = "column_added"
+    REMOVE_COLUMN = "column_removed"
+    MODIFY_COLUMN = "column_modified"
+    ADD_INDEX = "index_added"
+    REMOVE_INDEX = "index_removed"
+    MODIFY_INDEX = "index_modified"
+    ADD_CONSTRAINT = "constraint_added"
+    REMOVE_CONSTRAINT = "constraint_removed"
+    MODIFY_CONSTRAINT = "constraint_modified"
 
 
 class SchemaComparator:
-    """Compares schemas and generates migration SQL."""
+    """Compares database schemas and identifies differences."""
     
     def __init__(self):
-        self.ddl_analyzer = DDLAnalyzer()
+        """Initialize the schema comparator."""
+        pass
     
-    def compare_objects(self, source_objects: Dict, dest_objects: Dict) -> Dict[str, Dict]:
-        """Compare database objects between source and destination."""
-        comparison_result = {}
+    def analyze_table_differences(self, table_name: str, source_ddl: str, dest_ddl: str) -> List[Dict[str, Any]]:
+        """
+        Analyze differences between source and destination table DDL.
         
-        all_object_types = set(source_objects.keys()) | set(dest_objects.keys())
-        
-        for object_type in all_object_types:
-            source_set = {obj['name'] for obj in source_objects.get(object_type, [])}
-            dest_set = {obj['name'] for obj in dest_objects.get(object_type, [])}
+        Args:
+            table_name: Name of the table being compared
+            source_ddl: DDL of the source table
+            dest_ddl: DDL of the destination table
             
-            comparison_result[object_type] = {
-                'only_in_source': source_set - dest_set,
-                'only_in_dest': dest_set - source_set,
-                'in_both': source_set & dest_set,
-                'source_objects': {obj['name']: obj for obj in source_objects.get(object_type, [])},
-                'dest_objects': {obj['name']: obj for obj in dest_objects.get(object_type, [])}
-            }
-            
-            logger.debug(f"{object_type}: {len(source_set)} source, {len(dest_set)} dest, "
-                        f"{len(comparison_result[object_type]['only_in_source'])} only in source, "
-                        f"{len(comparison_result[object_type]['only_in_dest'])} only in dest")
-        
-        return comparison_result
-    
-    def analyze_table_differences(self, table_name: str, source_ddl: str, dest_ddl: str) -> List[Dict]:
-        """Analyze structural differences between two table DDL statements."""
-        try:
-            source_structure = self.ddl_analyzer.parse_create_table(source_ddl)
-            dest_structure = self.ddl_analyzer.parse_create_table(dest_ddl)
-            
-            differences = self.ddl_analyzer.compare_table_structures(source_structure, dest_structure)
-            
-            logger.debug(f"Table `{table_name}`: Found {len(differences)} structural differences")
-            return differences
-            
-        except Exception as e:
-            logger.error(f"Failed to analyze table differences for `{table_name}`: {e}")
+        Returns:
+            List of differences found
+        """
+        if not source_ddl or not dest_ddl:
             return []
+        
+        differences = []
+        
+        # Parse columns from both DDLs
+        source_columns = self._parse_columns(source_ddl)
+        dest_columns = self._parse_columns(dest_ddl)
+        
+        # Find column differences
+        source_col_names = set(source_columns.keys())
+        dest_col_names = set(dest_columns.keys())
+        
+        # Columns only in source (need to be added to dest)
+        for col_name in source_col_names - dest_col_names:
+            differences.append({
+                'type': ChangeType.ADD_COLUMN.value,
+                'column_name': col_name,
+                'column_definition': source_columns[col_name],
+                'description': f"Add column '{col_name}'"
+            })
+        
+        # Columns only in dest (need to be removed from dest)
+        for col_name in dest_col_names - source_col_names:
+            differences.append({
+                'type': ChangeType.REMOVE_COLUMN.value,
+                'column_name': col_name,
+                'column_definition': dest_columns[col_name],
+                'description': f"Remove column '{col_name}'"
+            })
+        
+        # Columns in both (check for modifications)
+        for col_name in source_col_names & dest_col_names:
+            source_def = source_columns[col_name].strip()
+            dest_def = dest_columns[col_name].strip()
+            
+            if source_def != dest_def:
+                differences.append({
+                    'type': ChangeType.MODIFY_COLUMN.value,
+                    'column_name': col_name,
+                    'original_definition': dest_def,
+                    'new_definition': source_def,
+                    'description': f"Modify column '{col_name}'"
+                })
+        
+        # Parse and compare indexes
+        source_indexes = self._parse_indexes(source_ddl)
+        dest_indexes = self._parse_indexes(dest_ddl)
+        
+        source_idx_names = set(source_indexes.keys())
+        dest_idx_names = set(dest_indexes.keys())
+        
+        # Indexes only in source (need to be added)
+        for idx_name in source_idx_names - dest_idx_names:
+            differences.append({
+                'type': ChangeType.ADD_INDEX.value,
+                'index_name': idx_name,
+                'index_definition': source_indexes[idx_name],
+                'description': f"Add index '{idx_name}'"
+            })
+        
+        # Indexes only in dest (need to be removed)
+        for idx_name in dest_idx_names - source_idx_names:
+            differences.append({
+                'type': ChangeType.REMOVE_INDEX.value,
+                'index_name': idx_name,
+                'index_definition': dest_indexes[idx_name],
+                'description': f"Remove index '{idx_name}'"
+            })
+        
+        return differences
     
-    def compare_ddl_content(self, source_ddl: str, dest_ddl: str, object_name: str) -> Dict:
-        """Compare DDL content between source and destination."""
-        # Normalize DDL for comparison (remove schema names, formatting differences)
-        source_normalized = self._normalize_ddl(source_ddl)
-        dest_normalized = self._normalize_ddl(dest_ddl)
+    def _parse_columns(self, ddl: str) -> Dict[str, str]:
+        """
+        Parse column definitions from CREATE TABLE DDL.
         
-        if source_normalized == dest_normalized:
-            return {'is_different': False, 'diff': None}
+        Args:
+            ddl: The CREATE TABLE DDL statement
+            
+        Returns:
+            Dictionary mapping column names to their definitions
+        """
+        columns = {}
         
-        # Generate unified diff
-        diff_lines = list(unified_diff(
-            dest_normalized.splitlines(keepends=True),
-            source_normalized.splitlines(keepends=True),
-            fromfile=f"dest/{object_name}",
-            tofile=f"source/{object_name}",
-            lineterm=''
-        ))
+        # Remove comments and normalize whitespace
+        ddl_clean = re.sub(r'--[^\n]*', '', ddl)
+        ddl_clean = re.sub(r'/\*.*?\*/', '', ddl_clean, flags=re.DOTALL)
         
-        return {
-            'is_different': True,
-            'diff': ''.join(diff_lines)
-        }
+        # Find the column definitions inside the CREATE TABLE statement
+        create_match = re.search(r'CREATE\s+TABLE[^(]*\((.*)\)', ddl_clean, re.IGNORECASE | re.DOTALL)
+        if not create_match:
+            return columns
+        
+        columns_section = create_match.group(1)
+        
+        # Split by commas, but be careful about commas inside parentheses
+        parts = self._split_sql_parts(columns_section)
+        
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+                
+            # Skip constraints, keys, and indexes
+            if re.match(r'^\s*(PRIMARY\s+KEY|UNIQUE|INDEX|KEY|CONSTRAINT|FOREIGN\s+KEY)', part, re.IGNORECASE):
+                continue
+            
+            # Extract column name (first word, possibly quoted)
+            col_match = re.match(r'^\s*`?([a-zA-Z_][a-zA-Z0-9_]*)`?\s+(.+)', part)
+            if col_match:
+                col_name = col_match.group(1)
+                col_def = col_match.group(2).strip()
+                columns[col_name] = col_def
+        
+        return columns
     
-    def _normalize_ddl(self, ddl: str) -> str:
-        """Normalize DDL for comparison."""
-        if not ddl:
-            return ""
+    def _parse_indexes(self, ddl: str) -> Dict[str, str]:
+        """
+        Parse index definitions from CREATE TABLE DDL.
         
-        # Remove comments
-        lines = []
-        for line in ddl.split('\n'):
-            line = line.strip()
-            if line and not line.startswith('--'):
-                lines.append(line)
+        Args:
+            ddl: The CREATE TABLE DDL statement
+            
+        Returns:
+            Dictionary mapping index names to their definitions
+        """
+        indexes = {}
         
-        # Join and normalize whitespace
-        normalized = ' '.join(lines)
-        normalized = ' '.join(normalized.split())  # Normalize whitespace
+        # Remove comments and normalize whitespace
+        ddl_clean = re.sub(r'--[^\n]*', '', ddl)
+        ddl_clean = re.sub(r'/\*.*?\*/', '', ddl_clean, flags=re.DOTALL)
         
-        return normalized.lower()
+        # Find the column definitions inside the CREATE TABLE statement
+        create_match = re.search(r'CREATE\s+TABLE[^(]*\((.*)\)', ddl_clean, re.IGNORECASE | re.DOTALL)
+        if not create_match:
+            return indexes
+        
+        columns_section = create_match.group(1)
+        
+        # Split by commas, but be careful about commas inside parentheses
+        parts = self._split_sql_parts(columns_section)
+        
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+            
+            # Look for KEY or INDEX definitions
+            key_match = re.match(r'^\s*(UNIQUE\s+)?(KEY|INDEX)\s+`?([a-zA-Z_][a-zA-Z0-9_]*)`?\s*\((.*)\)', part, re.IGNORECASE)
+            if key_match:
+                unique_prefix = key_match.group(1) or ''
+                index_type = key_match.group(2)
+                index_name = key_match.group(3)
+                index_columns = key_match.group(4)
+                
+                index_def = f"{unique_prefix}{index_type} `{index_name}` ({index_columns})"
+                indexes[index_name] = index_def.strip()
+        
+        return indexes
     
-    def generate_migration_sql(self, comparison: Dict, source_ddl_func, dest_ddl_func, 
+    def _split_sql_parts(self, sql: str) -> List[str]:
+        """
+        Split SQL by commas, respecting parentheses nesting.
+        
+        Args:
+            sql: SQL string to split
+            
+        Returns:
+            List of SQL parts
+        """
+        parts = []
+        current_part = ""
+        paren_depth = 0
+        
+        for char in sql:
+            if char == '(':
+                paren_depth += 1
+            elif char == ')':
+                paren_depth -= 1
+            elif char == ',' and paren_depth == 0:
+                parts.append(current_part.strip())
+                current_part = ""
+                continue
+            
+            current_part += char
+        
+        if current_part.strip():
+            parts.append(current_part.strip())
+        
+        return parts
+    
+    def compare_schemas(self, source_objects: Dict[str, List[Dict]], dest_objects: Dict[str, List[Dict]]) -> Dict[str, Any]:
+        """
+        Compare complete schemas and return differences.
+        
+        Args:
+            source_objects: Source schema objects
+            dest_objects: Destination schema objects
+            
+        Returns:
+            Dictionary containing comparison results
+        """
+        comparison = {}
+        
+        # Compare each object type
+        for obj_type in ['tables', 'procedures', 'functions', 'triggers', 'events']:
+            source_names = {obj['name'] for obj in source_objects.get(obj_type, [])}
+            dest_names = {obj['name'] for obj in dest_objects.get(obj_type, [])}
+            
+            comparison[obj_type] = {
+                'only_in_source': list(source_names - dest_names),
+                'only_in_dest': list(dest_names - source_names),
+                'in_both': list(source_names & dest_names)
+            }
+        
+        return comparison
+    
+    def compare_objects(self, source_objects: Dict[str, List[Dict]], dest_objects: Dict[str, List[Dict]]) -> Dict[str, Any]:
+        """
+        Compare database objects and return comparison results.
+        This is an alias for compare_schemas for backward compatibility.
+        
+        Args:
+            source_objects: Source database objects
+            dest_objects: Destination database objects
+            
+        Returns:
+            Dictionary containing comparison results
+        """
+        return self.compare_schemas(source_objects, dest_objects)
+    
+    def generate_migration_sql(self, comparison: Dict, get_source_ddl_func: Any, get_dest_ddl_func: Any,
                              source_schema: str, dest_schema: str) -> str:
-        """Generate migration SQL to sync destination with source."""
-        migration_lines = [
+        """
+        Generate migration SQL from comparison results.
+        
+        Args:
+            comparison: Schema comparison results
+            get_source_ddl_func: Function to get source DDL
+            get_dest_ddl_func: Function to get destination DDL
+            source_schema: Source schema name
+            dest_schema: Destination schema name
+            
+        Returns:
+            Migration SQL script
+        """
+        from alter_generator import AlterStatementGenerator
+        
+        sql_lines = [
             "-- DDL Wizard Migration Script",
             f"-- Source Schema: {source_schema}",
             f"-- Destination Schema: {dest_schema}",
-            f"-- Generated: {self._get_timestamp()}",
+            f"-- Generated: {datetime.now().isoformat()}",
             "",
             "-- WARNING: Review this script carefully before executing!",
             "-- This script will modify the destination database structure.",
@@ -114,215 +302,154 @@ class SchemaComparator:
             ""
         ]
         
-        # Initialize ALTER statement generator
         alter_generator = AlterStatementGenerator(dest_schema)
         
-        # Process in order: tables, functions, procedures, triggers, events
-        object_order = ['tables', 'functions', 'procedures', 'triggers', 'events']
+        # Helper functions to get DDL using the provided functions
+        def get_source_ddl(obj_type: str, obj_name: str) -> Optional[str]:
+            return get_source_ddl_func(obj_type, obj_name)
         
-        for object_type in object_order:
-            if object_type not in comparison:
-                continue
+        def get_dest_ddl(obj_type: str, obj_name: str) -> Optional[str]:
+            return get_dest_ddl_func(obj_type, obj_name)
+        
+        # Process table changes
+        sql_lines.extend([
+            "-- TABLES CHANGES",
+            "--" + "-" * 48
+        ])
+        
+        if 'tables' in comparison:
+            tables_comparison = comparison['tables']
+            
+            # Tables only in source (to be created)
+            for table_name in tables_comparison.get('only_in_source', []):
+                try:
+                    source_ddl = get_source_ddl('tables', table_name)
+                    if source_ddl:
+                        sql_lines.append(f"-- Create table: {table_name}")
+                        sql_lines.append(source_ddl + ";")
+                        sql_lines.append("")
+                except Exception:
+                    sql_lines.append(f"-- ERROR: Failed to process table {table_name}")
+            
+            # Tables only in dest (to be dropped)
+            for table_name in tables_comparison.get('only_in_dest', []):
+                sql_lines.append(f"-- Drop table: {table_name}")
+                sql_lines.append(f"DROP TABLE IF EXISTS `{dest_schema}`.`{table_name}`;")
+                sql_lines.append("")
+            
+            # Tables with differences (to be modified)
+            for table_name in tables_comparison.get('in_both', []):
+                try:
+                    source_ddl = get_source_ddl('tables', table_name)
+                    dest_ddl = get_dest_ddl('tables', table_name)
+                    if source_ddl and dest_ddl:
+                        differences = self.analyze_table_differences(table_name, source_ddl, dest_ddl)
+                        if differences:
+                            sql_lines.append(f"-- Modify table: {table_name}")
+                            
+                            # Generate the differences report
+                            report = alter_generator.generate_table_differences_report(table_name, differences)
+                            for line in report.split('\n'):
+                                sql_lines.append(f"-- {line}")
+                            
+                            # Generate ALTER statements
+                            alter_statements = alter_generator.generate_alter_statements(table_name, differences)
+                            for stmt in alter_statements:
+                                sql_lines.append(stmt + ";")
+                            sql_lines.append("")
+                except Exception as e:
+                    sql_lines.append(f"-- ERROR: Failed to process table {table_name}: {str(e)}")
+        
+        # Process procedure changes
+        sql_lines.extend([
+            "",
+            "-- PROCEDURES CHANGES",
+            "--" + "-" * 48
+        ])
+        
+        if 'procedures' in comparison:
+            procedures_comparison = comparison['procedures']
+            
+            # Procedures only in source (to be created)
+            for proc_name in procedures_comparison.get('only_in_source', []):
+                try:
+                    source_ddl = get_source_ddl('procedures', proc_name)
+                    if source_ddl:
+                        sql_lines.append(f"-- Create procedure: {proc_name}")
+                        sql_lines.append(f"DROP PROCEDURE IF EXISTS `{dest_schema}`.`{proc_name}`;")
+                        sql_lines.append(source_ddl + ";")
+                        sql_lines.append("")
+                except Exception:
+                    sql_lines.append(f"-- ERROR: Failed to process procedure {proc_name}")
+            
+            # Procedures only in dest (to be dropped)
+            for proc_name in procedures_comparison.get('only_in_dest', []):
+                sql_lines.append(f"-- Drop procedure: {proc_name}")
+                sql_lines.append(f"DROP PROCEDURE IF EXISTS `{dest_schema}`.`{proc_name}`;")
+                sql_lines.append("")
+            
+            # Procedures in both (to be updated)
+            for proc_name in procedures_comparison.get('in_both', []):
+                try:
+                    source_ddl = get_source_ddl('procedures', proc_name)
+                    dest_ddl = get_dest_ddl('procedures', proc_name)
+                    if source_ddl and dest_ddl and source_ddl.strip() != dest_ddl.strip():
+                        sql_lines.append(f"-- Update procedure: {proc_name}")
+                        sql_lines.append(f"DROP PROCEDURE IF EXISTS `{dest_schema}`.`{proc_name}`;")
+                        sql_lines.append(source_ddl + ";")
+                        sql_lines.append("")
+                except Exception:
+                    sql_lines.append(f"-- ERROR: Failed to process procedure {proc_name}")
+        
+        # Process function changes
+        if 'functions' in comparison:
+            functions_comparison = comparison['functions']
+            if (functions_comparison.get('only_in_source') or 
+                functions_comparison.get('only_in_dest') or 
+                functions_comparison.get('in_both')):
                 
-            comp = comparison[object_type]
-            migration_lines.extend(self._generate_type_migration(
-                object_type, comp, source_ddl_func, dest_ddl_func, dest_schema, alter_generator
-            ))
+                sql_lines.extend([
+                    "",
+                    "-- FUNCTIONS CHANGES", 
+                    "--" + "-" * 48
+                ])
+                
+                # Functions only in source (to be created)
+                for func_name in functions_comparison.get('only_in_source', []):
+                    try:
+                        source_ddl = get_source_ddl('functions', func_name)
+                        if source_ddl:
+                            sql_lines.append(f"-- Create function: {func_name}")
+                            sql_lines.append(f"DROP FUNCTION IF EXISTS `{dest_schema}`.`{func_name}`;")
+                            sql_lines.append(source_ddl + ";")
+                            sql_lines.append("")
+                    except Exception:
+                        sql_lines.append(f"-- ERROR: Failed to process function {func_name}")
+                
+                # Functions only in dest (to be dropped)
+                for func_name in functions_comparison.get('only_in_dest', []):
+                    sql_lines.append(f"-- Drop function: {func_name}")
+                    sql_lines.append(f"DROP FUNCTION IF EXISTS `{dest_schema}`.`{func_name}`;")
+                    sql_lines.append("")
+                
+                # Functions in both (to be updated)
+                for func_name in functions_comparison.get('in_both', []):
+                    try:
+                        source_ddl = get_source_ddl('functions', func_name)
+                        dest_ddl = get_dest_ddl('functions', func_name)
+                        if source_ddl and dest_ddl and source_ddl.strip() != dest_ddl.strip():
+                            sql_lines.append(f"-- Update function: {func_name}")
+                            sql_lines.append(f"DROP FUNCTION IF EXISTS `{dest_schema}`.`{func_name}`;")
+                            sql_lines.append(source_ddl + ";")
+                            sql_lines.append("")
+                    except Exception:
+                        sql_lines.append(f"-- ERROR: Failed to process function {func_name}")
         
-        migration_lines.extend([
+        sql_lines.extend([
             "",
             "SET FOREIGN_KEY_CHECKS = 1;",
             "",
             "-- Migration script completed."
         ])
         
-        return '\n'.join(migration_lines)
-    
-    def _generate_type_migration(self, object_type: str, comparison: Dict, 
-                               source_ddl_func, dest_ddl_func, dest_schema: str, 
-                               alter_generator: AlterStatementGenerator) -> List[str]:
-        """Generate migration SQL for a specific object type."""
-        lines = []
-        
-        # Check if there are any changes needed
-        has_changes = (comparison['only_in_source'] or comparison['only_in_dest'] or 
-                      any(self._has_ddl_differences(obj_name, object_type, source_ddl_func, dest_ddl_func) 
-                          for obj_name in comparison['in_both']))
-        
-        if not has_changes:
-            return lines
-        
-        lines.append(f"-- {object_type.upper()} CHANGES")
-        lines.append("-" * 50)
-        
-        # Drop objects that exist only in destination
-        for obj_name in comparison['only_in_dest']:
-            drop_sql = self._generate_drop_statement(object_type, obj_name, dest_schema)
-            if drop_sql:
-                lines.append(f"-- Drop {object_type[:-1]} that exists only in destination")
-                lines.append(drop_sql)
-                lines.append("")
-        
-        # Create objects that exist only in source
-        for obj_name in comparison['only_in_source']:
-            source_ddl = source_ddl_func(object_type, obj_name)
-            if source_ddl:
-                create_sql = self._adapt_ddl_for_destination(source_ddl, dest_schema)
-                lines.append(f"-- Create {object_type[:-1]} from source")
-                # Don't add extra semicolon - _adapt_ddl_for_destination handles it
-                lines.append(create_sql)
-                lines.append("")
-        
-        # Handle objects that exist in both but are different
-        for obj_name in comparison['in_both']:
-            source_ddl = source_ddl_func(object_type, obj_name)
-            dest_ddl = dest_ddl_func(object_type, obj_name)
-            
-            if object_type == 'tables' and source_ddl and dest_ddl:
-                # For tables, analyze structural differences and generate ALTER statements
-                differences = self.analyze_table_differences(obj_name, source_ddl, dest_ddl)
-                
-                if differences:
-                    lines.append(f"-- Modify table: {obj_name}")
-                    
-                    # Generate detailed difference report
-                    diff_report = alter_generator.generate_table_differences_report(obj_name, differences)
-                    for report_line in diff_report.split('\n'):
-                        lines.append(f"-- {report_line}")
-                    lines.append("")
-                    
-                    # Generate ALTER statements
-                    alter_statements = alter_generator.generate_alter_statements(obj_name, differences)
-                    for stmt in alter_statements:
-                        lines.append(stmt + ";")
-                        lines.append("")
-            
-            elif self._has_ddl_differences(obj_name, object_type, source_ddl_func, dest_ddl_func):
-                # For non-table objects, use drop/recreate approach
-                lines.append(f"-- Update {object_type[:-1]}: {obj_name}")
-                
-                # For functions, procedures, triggers, events - drop and recreate
-                drop_sql = self._generate_drop_statement(object_type, obj_name, dest_schema)
-                if drop_sql:
-                    lines.append(drop_sql)
-                
-                if source_ddl:
-                    create_sql = self._adapt_ddl_for_destination(source_ddl, dest_schema)
-                    # Don't add extra semicolon - _adapt_ddl_for_destination handles it
-                    lines.append(create_sql)
-                    lines.append("")
-        
-        lines.append("")
-        return lines
-    
-    def _has_ddl_differences(self, obj_name: str, object_type: str, source_ddl_func, dest_ddl_func) -> bool:
-        """Check if DDL differs between source and destination."""
-        source_ddl = source_ddl_func(object_type, obj_name)
-        dest_ddl = dest_ddl_func(object_type, obj_name)
-        
-        comparison = self.compare_ddl_content(source_ddl, dest_ddl, obj_name)
-        return comparison['is_different']
-    
-    def _generate_drop_statement(self, object_type: str, obj_name: str, schema: str) -> str:
-        """Generate DROP statement for an object."""
-        if object_type == 'tables':
-            return f"DROP TABLE IF EXISTS `{schema}`.`{obj_name}`;"
-        elif object_type == 'functions':
-            return f"DROP FUNCTION IF EXISTS `{schema}`.`{obj_name}`;"
-        elif object_type == 'procedures':
-            return f"DROP PROCEDURE IF EXISTS `{schema}`.`{obj_name}`;"
-        elif object_type == 'triggers':
-            return f"DROP TRIGGER IF EXISTS `{schema}`.`{obj_name}`;"
-        elif object_type == 'events':
-            return f"DROP EVENT IF EXISTS `{schema}`.`{obj_name}`;"
-        return ""
-    
-    def _adapt_ddl_for_destination(self, ddl: str, dest_schema: str) -> str:
-        """Adapt DDL for destination schema with proper delimiter handling."""
-        if not ddl:
-            return ""
-        
-        adapted_ddl = ddl.strip()
-        
-        # Check if this is a stored procedure, function, or trigger
-        ddl_upper = adapted_ddl.upper()
-        # Use regex to handle DEFINER clauses between CREATE and object type
-        import re
-        is_stored_object = bool(re.search(r'CREATE\s+(?:DEFINER[^)]*\)?\s+)?(FUNCTION|PROCEDURE|TRIGGER)', ddl_upper))
-        
-        if is_stored_object:
-            # For stored procedures, functions, and triggers, we need to:
-            # 1. Ensure proper semicolons within the body
-            # 2. Wrap with DELIMITER commands
-            
-            # For stored objects, we don't modify semicolons - just wrap with DELIMITER
-            # Remove trailing semicolon if present (will be replaced with $$)
-            if adapted_ddl.endswith(';'):
-                adapted_ddl = adapted_ddl[:-1]
-            
-            # Wrap with DELIMITER commands and add $$ terminator
-            result = f"DELIMITER $$\n{adapted_ddl}$$\nDELIMITER ;"
-            return result
-        else:
-            # For regular DDL (tables, etc.), ensure proper semicolon
-            if not adapted_ddl.endswith(';'):
-                adapted_ddl += ';'
-            return adapted_ddl
-    
-    def _get_timestamp(self) -> str:
-        """Get current timestamp for migration script."""
-        from datetime import datetime
-        return datetime.now().isoformat()
-    
-    def generate_comparison_report(self, comparison: Dict, source_ddl_func, dest_ddl_func) -> str:
-        """Generate a human-readable comparison report."""
-        report_lines = [
-            "DDL Wizard Schema Comparison Report",
-            "=" * 40,
-            ""
-        ]
-        
-        # Initialize ALTER statement generator for detailed reporting
-        alter_generator = AlterStatementGenerator("destination")
-        
-        for object_type, comp in comparison.items():
-            report_lines.append(f"{object_type.upper()}:")
-            report_lines.append(f"  Only in source: {len(comp['only_in_source'])}")
-            if comp['only_in_source']:
-                for obj in sorted(comp['only_in_source']):
-                    report_lines.append(f"    + {obj}")
-            
-            report_lines.append(f"  Only in destination: {len(comp['only_in_dest'])}")
-            if comp['only_in_dest']:
-                for obj in sorted(comp['only_in_dest']):
-                    report_lines.append(f"    - {obj}")
-            
-            # For objects in both, show detailed differences for tables
-            different_objects = []
-            for obj_name in comp['in_both']:
-                if object_type == 'tables':
-                    source_ddl = source_ddl_func(object_type, obj_name)
-                    dest_ddl = dest_ddl_func(object_type, obj_name)
-                    
-                    if source_ddl and dest_ddl:
-                        differences = self.analyze_table_differences(obj_name, source_ddl, dest_ddl)
-                        if differences:
-                            different_objects.append((obj_name, differences))
-                else:
-                    if self._has_ddl_differences(obj_name, object_type, source_ddl_func, dest_ddl_func):
-                        different_objects.append((obj_name, None))
-            
-            report_lines.append(f"  In both schemas: {len(comp['in_both'])}")
-            if different_objects:
-                report_lines.append(f"  With differences: {len(different_objects)}")
-                for obj_name, differences in different_objects:
-                    if object_type == 'tables' and differences:
-                        diff_report = alter_generator.generate_table_differences_report(obj_name, differences)
-                        for line in diff_report.split('\n'):
-                            report_lines.append(f"    {line}")
-                    else:
-                        report_lines.append(f"    ~ {obj_name}")
-            
-            report_lines.append("")
-        
-        return '\n'.join(report_lines)
+        return '\n'.join(sql_lines)
