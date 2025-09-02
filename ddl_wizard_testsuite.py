@@ -386,6 +386,8 @@ class DDLWizardTester:
             
             # Missing function that exists in source
             # CalculateOrderTotal function is not created here
+            # Explicitly ensure function doesn't exist
+            cursor.execute("DROP FUNCTION IF EXISTS CalculateOrderTotal")
             
             # Create different trigger
             cursor.execute("DROP TRIGGER IF EXISTS tr_customers_loyalty_update")
@@ -937,7 +939,7 @@ class DDLWizardTester:
                 conn = pymysql.connect(**conn_config)
                 cursor = conn.cursor()
                 
-                cursor.execute(f"#DROP DATABASE IF EXISTS `{database}`")
+                cursor.execute(f"DROP DATABASE IF EXISTS `{database}`")
                 conn.commit()
                 conn.close()
                 

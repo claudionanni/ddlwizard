@@ -113,7 +113,28 @@ class DDLWizardCore:
         source_objects = self.source_db.get_all_objects_with_ddl()
         dest_objects = self.dest_db.get_all_objects_with_ddl()
         
+        # Save DDL objects to files for comparison
+        if self.git_manager:
+            logger.debug("Saving source DDL objects to files...")
+            self.git_manager.save_all_objects(source_objects, self._get_source_ddl)
+            logger.debug("Saving destination DDL objects to files...")
+            # Note: We don't save dest objects to avoid conflicts, comparison will handle differences
+        
         return source_objects, dest_objects
+    
+    def _get_source_ddl(self, object_type: str, object_name: str) -> str:
+        """Get DDL for a source database object."""
+        if object_type == 'tables':
+            return self.source_db.get_table_ddl(object_name)
+        elif object_type == 'functions':
+            return self.source_db.get_function_ddl(object_name)
+        elif object_type == 'procedures':
+            return self.source_db.get_procedure_ddl(object_name)
+        elif object_type == 'triggers':
+            return self.source_db.get_trigger_ddl(object_name)
+        elif object_type == 'events':
+            return self.source_db.get_event_ddl(object_name)
+        return ""
     
     def compare_schemas(self, source_objects: Dict, dest_objects: Dict) -> Dict:
         """

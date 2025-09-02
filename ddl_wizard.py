@@ -206,6 +206,57 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
                 rollback_lines.append(f"-- ERROR: Failed to restore function {func_name}: {str(e)}")
                 continue
     
+    # Process triggers that exist in both and may have differences  
+    if 'triggers' in comparison:
+        triggers_comparison = comparison['triggers']
+        
+        for trigger_name in triggers_comparison.get('in_both', []):
+            try:
+                # Get DDL for both versions
+                source_ddl = get_source_ddl('triggers', trigger_name)
+                dest_ddl = get_dest_ddl('triggers', trigger_name)
+                
+                # Only generate rollback if there are actual differences
+                source_normalized = ' '.join(source_ddl.split()) if source_ddl else ''
+                dest_normalized = ' '.join(dest_ddl.split()) if dest_ddl else ''
+                
+                if source_normalized != dest_normalized and dest_ddl:
+                    rollback_lines.append(f"-- Rollback trigger: {trigger_name}")
+                    rollback_lines.append(f"DROP TRIGGER IF EXISTS `{trigger_name}`;")
+                    rollback_lines.append("DELIMITER $$")
+                    rollback_lines.append(dest_ddl + "$$")
+                    rollback_lines.append("DELIMITER ;")
+                    rollback_lines.append("")
+                    
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to process trigger {trigger_name}: {str(e)}")
+                continue
+        
+        # Handle triggers that are only in source (created in migration)
+        for trigger_name in triggers_comparison.get('only_in_source', []):
+            try:
+                # Drop the created trigger
+                rollback_lines.append(f"-- Rollback creation of trigger: {trigger_name}")
+                rollback_lines.append(f"DROP TRIGGER IF EXISTS `{trigger_name}`;")
+                rollback_lines.append("")
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to process trigger {trigger_name}: {str(e)}")
+                continue
+        
+        # Handle triggers that are only in destination (dropped in migration)
+        for trigger_name in triggers_comparison.get('only_in_dest', []):
+            try:
+                dest_ddl = get_dest_ddl('triggers', trigger_name)
+                if dest_ddl:
+                    rollback_lines.append(f"-- Rollback deletion of trigger: {trigger_name}")
+                    rollback_lines.append("DELIMITER $$")
+                    rollback_lines.append(dest_ddl + "$$")
+                    rollback_lines.append("DELIMITER ;")
+                    rollback_lines.append("")
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to restore trigger {trigger_name}: {str(e)}")
+                continue
+    
     # Add closing statements
     rollback_lines.extend([
         "",
