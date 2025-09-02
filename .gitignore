@@ -36,14 +36,22 @@ env/
 # DDL Wizard specific
 *.log
 *.db
+*.sqlite
+*.sqlite3
 test_data/
-test_output*/
+test_output*
 migration_script_failure.txt
 .ddl_wizard_history.db
 
-# Backup files
-*.backup
+# Legacy files (old structure)
 *_old.py
+*.backup
+
+# Development and build
+build/
+dist/
+*.egg-info/
+.pytest_cache/
 
 # OS
 .DS_Store

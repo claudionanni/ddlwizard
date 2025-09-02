@@ -14,13 +14,13 @@ import shutil
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
-# Add the current directory to Python path so we can import DDL Wizard modules
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add the parent directory to Python path so we can import DDL Wizard modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     import pymysql
-    from database import DatabaseManager
-    from ddl_wizard import main as ddl_wizard_main
+    from ddlwizard.utils.database import DatabaseManager
+    from ddlwizard.cli import main as ddl_wizard_main
 except ImportError as e:
     print(f"❌ Error importing required modules: {e}")
     print("💡 Make sure you have installed requirements: pip install -r requirements.txt")

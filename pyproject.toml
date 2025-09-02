@@ -1,0 +1,88 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ddlwizard"
+version = "1.0.0"
+description = "Database DDL Extraction and Comparison Tool"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Claudio Nanni", email = "your.email@example.com"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Database",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = ["database", "ddl", "schema", "migration", "mysql", "mariadb"]
+requires-python = ">=3.8"
+dependencies = [
+    "PyMySQL>=1.0.0",
+    "GitPython>=3.1.0",
+    "PyYAML>=6.0",
+    "streamlit>=1.25.0",
+    "plotly>=5.0.0",
+    "pandas>=1.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=22.0.0",
+    "flake8>=5.0.0",
+    "mypy>=1.0.0",
+]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/claudionanni/ddlwizard"
+Repository = "https://github.com/claudionanni/ddlwizard"
+Documentation = "https://github.com/claudionanni/ddlwizard/blob/main/README.md"
+"Bug Tracker" = "https://github.com/claudionanni/ddlwizard/issues"
+
+[project.scripts]
+ddlwizard = "ddlwizard.cli:main"
+ddlwizard-gui = "ddlwizard.gui:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ddlwizard*"]
+
+[tool.setuptools.package-data]
+ddlwizard = ["config/*.yaml"]
+
+[tool.black]
+line-length = 100
+target-version = ["py38"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--verbose",
+    "--tb=short",
+    "--strict-markers",
+]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
