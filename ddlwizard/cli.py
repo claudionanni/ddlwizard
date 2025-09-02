@@ -334,17 +334,17 @@ def parse_arguments_new() -> argparse.Namespace:
         epilog="""
 Examples:
   # Compare two databases and generate migration
-  python ddl_wizard.py compare --source-host localhost --source-user root --source-schema db1 \\
+  python main.py compare --source-host localhost --source-user root --source-schema db1 \\
                               --dest-host localhost --dest-user root --dest-schema db2
   
   # Use configuration file
-  python ddl_wizard.py compare --config config.yaml
+  python main.py compare --config config/ddl_wizard_config.yaml
   
   # Extract DDL from database
-  python ddl_wizard.py extract --source-host localhost --source-user root --source-schema mydb
+  python main.py extract --source-host localhost --source-user root --source-schema mydb
   
   # Show migration history
-  python ddl_wizard.py history
+  python main.py history
         """
     )
     

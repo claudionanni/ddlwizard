@@ -1,7 +1,6 @@
 # 🧙‍♂️ DDL Wizard - MariaDB Schema Management Tool
 
-A comprehensivepython ddl_wizard.py --interactive 
-  --source-host localhost --source-user root --source-password password --source-schema mydbython tool for MariaDB/MySQL schema management, version control, and automated migration generation. DDL Wizard provides professional-grade features for safe, reliable database schema evolution.
+A comprehensive Python tool for MariaDB/MySQL schema management, version control, and automated migration generation. DDL Wizard provides professional-grade features for safe, reliable database schema evolution.
 
 ## 🚀 Features
 
@@ -42,8 +41,38 @@ pip install -r requirements.txt
 
 3. Verify installation:
 ```bash
-python ddl_wizard.py --help
+python main.py --help
 ```
+
+## 🔄 Migration Guide (v1.1.0+)
+
+If you're upgrading from an earlier version, here are the command syntax changes:
+
+### Command Structure
+- **Old**: `python ddl_wizard.py --mode compare [options]`
+- **New**: `python main.py compare [options]`
+
+### Key Changes
+- Entry point: `ddl_wizard.py` → `main.py`
+- Mode parameter: `--mode compare` → `compare` (positional)
+- Visualization: `--visualize` → `--enable-visualization`
+- Parameter order: Global options (like `--output-dir`) must come before subcommand
+
+### Example Migration
+```bash
+# Old command
+python main.py compare --visualize --output-dir=/tmp/out \
+  --source-host localhost --source-schema db1 \
+  --dest-host localhost --dest-schema db2
+
+# New command  
+python main.py --output-dir=/tmp/out compare --enable-visualization \
+  --source-host localhost --source-schema db1 \
+  --dest-host localhost --dest-schema db2
+```
+
+### Backward Compatibility
+The old file structure is preserved for reference, but all new development uses the restructured package.
 
 ## 🎯 Quick Start
 
@@ -51,8 +80,8 @@ python ddl_wizard.py --help
 Compare two schemas and generate migration SQL:
 
 ```bash
-python ddl_wizard.py 
-  --source-host localhost --source-user root --source-password password --source-schema production 
+python main.py compare \
+  --source-host localhost --source-user root --source-password password --source-schema production \
   --dest-host localhost --dest-user root --dest-password password --dest-schema staging
 ```
 
@@ -60,42 +89,73 @@ python ddl_wizard.py
 Create a configuration file (`config.yaml`) and use profiles:
 
 ```bash
-python ddl_wizard.py --config ddl_wizard_config.yaml --profile development
+python main.py --config config/ddl_wizard_config.yaml --profile development compare
 ```
 
 ### Interactive Mode
 Enable interactive mode for user confirmations:
 
 ```bash
-python main.py --interactive 
-  --source-host localhost --source-user root --source-password password --source-schema source_db 
+python main.py compare --interactive \
+  --source-host localhost --source-user root --source-password password --source-schema source_db \
   --dest-host localhost --dest-user root --dest-password password --dest-schema dest_db
 ```
 
-## 🔧 Operation Modes
+## �️ Web GUI Interface
+
+DDL Wizard provides a user-friendly web interface built with Streamlit for those who prefer graphical interfaces.
+
+### Starting the GUI
+
+**Method 1: Direct Module Run (Recommended)**
+```bash
+streamlit run ddlwizard/gui.py --server.port 8501
+```
+
+**Method 2: Using Entry Point**
+```bash
+streamlit run gui_main.py --server.port 8501
+```
+
+**Method 3: Legacy GUI (Backward Compatibility)**
+```bash
+streamlit run ddl_wizard_gui.py --server.port 8501
+```
+
+### GUI Features
+- 🗄️ **Interactive Database Configuration**: Visual forms for source and destination database settings
+- 🔍 **Schema Comparison**: Side-by-side comparison with visual diff highlighting
+- 📊 **Migration Preview**: Review generated SQL before execution
+- 🛡️ **Safety Controls**: Built-in safety checks and dry-run capabilities
+- 📈 **Results Visualization**: Graphical display of migration results and statistics
+- 💾 **Configuration Management**: Save and load database profiles
+
+Access the web interface at `http://localhost:8501` after starting the GUI.
+
+## �🔧 Operation Modes
 
 ### Compare Mode (Default)
 Compares schemas and generates migration SQL:
 ```bash
-python ddl_wizard.py --mode compare [database options]
+python main.py compare [database options]
 ```
 
 ### Extract Mode
 Extracts DDL objects from source database only:
 ```bash
-python ddl_wizard.py --mode extract --source-host HOST --source-user USER --source-password PASS --source-schema SCHEMA
+python main.py extract --source-host HOST --source-user USER --source-password PASS --source-schema SCHEMA
 ```
 
 ### Visualize Mode
 Generates schema documentation and ER diagrams:
 ```bash
-python ddl_wizard.py --mode visualize --source-host HOST --source-user USER --source-password PASS --source-schema SCHEMA
+python main.py visualize --source-host HOST --source-user USER --source-password PASS --source-schema SCHEMA
 ```
 
 ### History Mode
 Shows migration execution history:
 ```bash
-python ddl_wizard.py --mode history
+python main.py history
 ```
 
 ## 📁 Configuration
@@ -157,7 +217,7 @@ Generate comprehensive schema documentation:
 
 ### Example Output
 ```bash
-python ddl_wizard.py --mode visualize --source-host localhost --source-user root --source-password password --source-schema mydb
+python main.py visualize --source-host localhost --source-user root --source-password password --source-schema mydb
 ```
 
 Generates:
@@ -179,7 +239,7 @@ Track all migration executions with detailed logging:
 
 ### View History
 ```bash
-python ddl_wizard.py --mode history
+python main.py history
 ```
 
 ## 🎨 Interactive Mode

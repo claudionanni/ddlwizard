@@ -158,8 +158,8 @@ echo "✅ Test databases created successfully!"
 
 # Run DDL Wizard
 echo "🧙‍♂️ Running DDL Wizard..."
-python ddl_wizard.py \
-    --mode compare \
+python main.py \
+    compare \
     --source-host "$DB_HOST" \
     --source-port "$DB_PORT" \
     --source-user "$DB_USER" \

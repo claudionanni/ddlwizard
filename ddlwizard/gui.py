@@ -10,12 +10,21 @@ import streamlit as st
 import os
 import json
 import traceback
+import sys
 from pathlib import Path
 from typing import Dict, Any
 
-from .utils.database import DatabaseConfig
-from .utils.config import DDLWizardConfig, DatabaseConnection, DatabaseSettings, OutputSettings, SafetySettings
-from .core import run_complete_migration
+# Handle imports for both direct execution and package imports
+try:
+    from .utils.database import DatabaseConfig
+    from .utils.config import DDLWizardConfig, DatabaseConnection, DatabaseSettings, OutputSettings, SafetySettings
+    from .core import run_complete_migration
+except ImportError:
+    # If running directly via streamlit, add parent directory to path
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from ddlwizard.utils.database import DatabaseConfig
+    from ddlwizard.utils.config import DDLWizardConfig, DatabaseConnection, DatabaseSettings, OutputSettings, SafetySettings
+    from ddlwizard.core import run_complete_migration
 
 
 # Set page configuration

@@ -45,6 +45,25 @@ source .venv/bin/activate  # On Windows: .venv\\Scripts\\activate
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Verify installation
+python main.py --help
+```
+
+### Project Structure (v1.1.0+)
+```
+ddlwizard/
+├── ddlwizard/              # Main package
+│   ├── cli.py              # Command line interface
+│   ├── core.py             # Core business logic
+│   ├── gui.py              # Streamlit web interface
+│   └── utils/              # Organized utilities
+├── tests/                  # Test suite
+├── docs/                   # Documentation
+├── scripts/                # Utility scripts
+├── config/                 # Configuration files
+├── pyproject.toml          # Modern Python packaging
+└── main.py                 # Backward compatibility entry point
 ```
 
 ### Dependencies
@@ -90,26 +109,26 @@ Then open your browser to `http://localhost:8501`
 #### Compare Schemas (Main Operation)
 ```bash
 # Compare two databases and generate migration
-python ddl_wizard.py compare \
+python main.py compare \
   --source-host localhost --source-user root --source-schema db1 \
   --dest-host localhost --dest-user root --dest-schema db2
 ```
 
 #### Extract DDL from Database
 ```bash
-python ddl_wizard.py extract \
+python main.py extract \
   --source-host localhost --source-user root --source-schema mydb
 ```
 
 #### Generate Schema Visualizations
 ```bash
-python ddl_wizard.py visualize \
+python main.py visualize \
   --source-host localhost --source-user root --source-schema mydb
 ```
 
 #### Show Migration History
 ```bash
-python ddl_wizard.py history --limit 10
+python main.py history --limit 10
 ```
 
 ### Configuration File
@@ -141,7 +160,7 @@ output:
 
 Use with:
 ```bash
-python ddl_wizard.py compare --config config.yaml
+python main.py compare --config config/ddl_wizard_config.yaml
 ```
 
 ### CLI Options
@@ -173,20 +192,36 @@ The heart of DDL Wizard containing reusable business logic:
 - Safety analysis
 - Migration reporting
 
-### CLI Interface (`ddl_wizard.py`)
+### CLI Interface
 Professional command-line interface:
 - Argument parsing and validation
 - Configuration management
 - Calls core module for operations
 - Output formatting and logging
 
-### GUI Interface (`ddl_wizard_gui.py`)
+### GUI Interface
 Modern web-based interface using Streamlit:
+
+**Starting the GUI:**
+```bash
+# Recommended method
+streamlit run ddlwizard/gui.py --server.port 8501
+
+# Alternative entry point
+streamlit run gui_main.py --server.port 8501
+
+# Legacy compatibility
+streamlit run ddl_wizard_gui.py --server.port 8501
+```
+
+**Features:**
 - Interactive forms and controls
 - Real-time validation and feedback
 - Progress indicators
 - File download capabilities
 - Calls same core module as CLI
+- Visual schema comparison
+- Migration preview and execution controls
 
 ### Supporting Modules
 - **database.py**: Database connection and DDL extraction
@@ -263,7 +298,7 @@ git tag -a v1.0.0 -m "Stable CLI version"
 git checkout -b feature/new-feature
 
 # DDL Wizard automatically commits changes
-python ddl_wizard.py compare --source-host ... --dest-host ...
+python main.py compare --source-host ... --dest-host ...
 ```
 
 ## 📊 Migration Reports
