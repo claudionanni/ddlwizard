@@ -81,8 +81,8 @@ class SchemaComparator:
                 differences.append({
                     'type': ChangeType.MODIFY_COLUMN.value,
                     'column_name': col_name,
-                    'original_definition': dest_def,
-                    'new_definition': source_def,
+                    'original_definition': source_def,
+                    'new_definition': dest_def,
                     'description': f"Modify column '{col_name}'"
                 })
         

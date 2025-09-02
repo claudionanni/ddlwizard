@@ -90,9 +90,10 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
                 
                 if source_ddl and dest_ddl:
                     # Use the comparator to analyze table differences
+                    # For rollback, we need reverse differences: from source (current) back to dest (original)
                     from schema_comparator import SchemaComparator
                     temp_comparator = SchemaComparator()
-                    differences = temp_comparator.analyze_table_differences(table_name, source_ddl, dest_ddl)
+                    differences = temp_comparator.analyze_table_differences(table_name, dest_ddl, source_ddl)
                     
                     if differences:
                         # Generate rollback statements for this table

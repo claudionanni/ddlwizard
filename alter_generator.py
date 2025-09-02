@@ -46,8 +46,9 @@ class AlterStatementGenerator:
                 rollback_statements.append(f"ALTER TABLE `{table_name}` ADD COLUMN `{col_name}` {col_def}")
             elif diff_type == ChangeType.MODIFY_COLUMN.value:
                 col_name = diff.get('column_name', '')
-                orig_def = diff.get('original_definition', '')
-                rollback_statements.append(f"ALTER TABLE `{table_name}` MODIFY COLUMN `{col_name}` {orig_def}")
+                # For rollback, we use new_definition (the target state to restore to)
+                rollback_def = diff.get('new_definition', '')
+                rollback_statements.append(f"ALTER TABLE `{table_name}` MODIFY COLUMN `{col_name}` {rollback_def}")
             elif diff_type == ChangeType.ADD_INDEX.value:
                 rollback_statements.append(f"ALTER TABLE `{table_name}` DROP INDEX `{diff.get('index_name')}`")
             elif diff_type == ChangeType.REMOVE_INDEX.value:
