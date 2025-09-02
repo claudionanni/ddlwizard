@@ -408,7 +408,7 @@ def generate_migration_report(comparison_result: Dict[str, Any], output_file: st
             "",
             "## Summary",
             f"- Source Schema: {comparison_result.get('source_schema', 'Unknown')}",
-            f"- Destination Schema: {comparison_result.get('destination_schema', 'Unknown')}",
+            f"- Destination Schema: {comparison_result.get('dest_schema', comparison_result.get('destination_schema', 'Unknown'))}",
             ""
         ]
         

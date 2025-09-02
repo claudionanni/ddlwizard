@@ -441,8 +441,8 @@ class DDLWizardCore:
                     pass
 
         return {
-            'source_schema': source_config.schema,
-            'dest_schema': dest_config.schema,
+            'source_schema': source_config.schema or 'Unknown',
+            'dest_schema': dest_config.schema or 'Unknown',
             'timestamp': comparison.get('timestamp', 'unknown'),
             'detailed_changes': detailed_changes,
             'safety_warnings': [{'level': w.level.value, 'message': w.message} for w in safety_warnings],
@@ -542,8 +542,8 @@ class DDLWizardCore:
         lines = [
             "DDL Wizard Schema Comparison Report",
             "=" * 40,
-            f"Source Schema: {migration_report_data.get('source_schema', 'unknown')}",
-            f"Destination Schema: {migration_report_data.get('dest_schema', 'unknown')}",
+            f"Source Schema: {migration_report_data.get('source_schema', 'Unknown')}",
+            f"Destination Schema: {migration_report_data.get('dest_schema', 'Unknown')}",
             f"Generated: {migration_report_data.get('timestamp', 'unknown')}",
             "",
             f"Total Operations: {len(migration_report_data.get('detailed_changes', []))}",

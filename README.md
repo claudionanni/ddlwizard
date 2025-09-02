@@ -19,6 +19,7 @@ A comprehensive Python tool for MariaDB/MySQL schema management, version control
 - **Migration History**: SQLite-based tracking of all migration executions
 - **Schema Visualization**: Generate ER diagrams and documentation (Mermaid, Graphviz, HTML)
 - **Multiple Operation Modes**: Extract, compare, migrate, visualize, and history modes
+- **🧪 Test Data Included**: Ready-to-use sample schemas for immediate testing (`testdata/`)
 
 ## 📋 Requirements
 
@@ -42,6 +43,13 @@ pip install -r requirements.txt
 3. Verify installation:
 ```bash
 python main.py --help
+```
+
+4. **Optional**: Set up test databases for immediate testing:
+```bash
+# Quick test with included sample schemas
+mysql -u root -p < testdata/source_schema.sql
+mysql -u root -p < testdata/destination_schema.sql
 ```
 
 ## 🔄 Migration Guide (v1.1.0+)
@@ -75,6 +83,23 @@ python main.py --output-dir=/tmp/out compare --enable-visualization \
 The old file structure is preserved for reference, but all new development uses the restructured package.
 
 ## 🎯 Quick Start
+
+### 🧪 Try It Out with Test Data (Recommended)
+DDL Wizard includes sample test schemas to help you get started immediately:
+
+```bash
+# 1. Create test databases (see testdata/README.md for details)
+mysql -u root -p < testdata/source_schema.sql
+mysql -u root -p < testdata/destination_schema.sql
+
+# 2. Run comparison
+python main.py compare \
+  --source-host localhost --source-user root --source-password yourpass --source-schema ddlwizard_source_test \
+  --dest-host localhost --dest-user root --dest-password yourpass --dest-schema ddlwizard_dest_test \
+  --output-dir ./test_results
+```
+
+> 📖 **See [`testdata/README.md`](testdata/README.md) for complete setup instructions and Docker examples.**
 
 ### Basic Schema Comparison
 Compare two schemas and generate migration SQL:

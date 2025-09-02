@@ -58,6 +58,11 @@ ddlwizard/
 │   ├── core.py             # Core business logic
 │   ├── gui.py              # Streamlit web interface
 │   └── utils/              # Organized utilities
+├── testdata/               # 🧪 Sample test schemas
+│   ├── source_schema.sql   # Source test database
+│   ├── destination_schema.sql # Destination test database
+│   ├── README.md           # Test setup instructions
+│   └── validate_setup.sh   # Validation script
 ├── tests/                  # Test suite
 ├── docs/                   # Documentation
 ├── scripts/                # Utility scripts
