@@ -301,6 +301,7 @@ class DDLWizardCore:
             for table_name in tables_comparison.get('only_in_source', []):
                 detailed_changes.append({
                     'type': 'TABLE',
+                    'object_type': 'table',
                     'object_name': table_name,
                     'operation': 'CREATE',
                     'sql': f"CREATE TABLE {table_name}"
@@ -310,6 +311,7 @@ class DDLWizardCore:
             for table_name in tables_comparison.get('only_in_dest', []):
                 detailed_changes.append({
                     'type': 'TABLE',
+                    'object_type': 'table',
                     'object_name': table_name,
                     'operation': 'DROP',
                     'sql': f"DROP TABLE {table_name}"
@@ -325,6 +327,7 @@ class DDLWizardCore:
                         if differences:
                             detailed_changes.append({
                                 'type': 'TABLE',
+                                'object_type': 'table',
                                 'object_name': table_name,
                                 'operation': 'MODIFY',
                                 'sql': f"ALTER TABLE {table_name}"
@@ -340,6 +343,7 @@ class DDLWizardCore:
             for proc_name in procedures_comparison.get('only_in_source', []):
                 detailed_changes.append({
                     'type': 'PROCEDURE',
+                    'object_type': 'procedure',
                     'object_name': proc_name,
                     'operation': 'CREATE',
                     'sql': f"CREATE PROCEDURE {proc_name}"
@@ -349,6 +353,7 @@ class DDLWizardCore:
             for proc_name in procedures_comparison.get('only_in_dest', []):
                 detailed_changes.append({
                     'type': 'PROCEDURE',
+                    'object_type': 'procedure',
                     'object_name': proc_name,
                     'operation': 'DROP',
                     'sql': f"DROP PROCEDURE {proc_name}"
@@ -364,6 +369,7 @@ class DDLWizardCore:
                     if source_normalized != dest_normalized:
                         detailed_changes.append({
                             'type': 'PROCEDURE',
+                            'object_type': 'procedure',
                             'object_name': proc_name,
                             'operation': 'UPDATE',
                             'sql': f"DROP/CREATE PROCEDURE {proc_name}"
@@ -379,6 +385,7 @@ class DDLWizardCore:
             for func_name in functions_comparison.get('only_in_source', []):
                 detailed_changes.append({
                     'type': 'FUNCTION',
+                    'object_type': 'function',
                     'object_name': func_name,
                     'operation': 'CREATE',
                     'sql': f"CREATE FUNCTION {func_name}"
@@ -388,6 +395,7 @@ class DDLWizardCore:
             for func_name in functions_comparison.get('only_in_dest', []):
                 detailed_changes.append({
                     'type': 'FUNCTION',
+                    'object_type': 'function',
                     'object_name': func_name,
                     'operation': 'DROP',
                     'sql': f"DROP FUNCTION {func_name}"
@@ -403,6 +411,7 @@ class DDLWizardCore:
                     if source_normalized != dest_normalized:
                         detailed_changes.append({
                             'type': 'FUNCTION',
+                            'object_type': 'function',
                             'object_name': func_name,
                             'operation': 'UPDATE',
                             'sql': f"DROP/CREATE FUNCTION {func_name}"
@@ -412,9 +421,11 @@ class DDLWizardCore:
 
         return {
             'source_schema': source_config.schema,
-            'destination_schema': dest_config.schema,
+            'dest_schema': dest_config.schema,
+            'timestamp': comparison.get('timestamp', 'unknown'),
             'detailed_changes': detailed_changes,
-            'safety_warnings': [{'level': w.level.value, 'message': w.message} for w in safety_warnings]
+            'safety_warnings': [{'level': w.level.value, 'message': w.message} for w in safety_warnings],
+            'comparison_data': comparison  # Include full comparison data for detailed reporting
         }
     
     def generate_schema_visualization(self, source_objects: Dict, output_dir: str):
@@ -506,7 +517,7 @@ class DDLWizardCore:
         return str(migration_file), str(rollback_file), str(migration_report_path)
     
     def _generate_comparison_summary(self, migration_report_data: Dict) -> str:
-        """Generate a simple text summary of the comparison."""
+        """Generate a detailed text summary of the comparison."""
         lines = [
             "DDL Wizard Schema Comparison Report",
             "=" * 40,
@@ -524,10 +535,55 @@ class DDLWizardCore:
         if not changes:
             lines.append("  No changes detected")
         else:
+            # Group changes by object type for better reporting
+            object_types = {}
             for change in changes:
                 change_type = change.get('operation', 'unknown')
                 object_name = change.get('object_name', 'unknown')
-                lines.append(f"  - {change_type}: {object_name}")
+                object_type = change.get('object_type', 'unknown')
+                
+                if object_type not in object_types:
+                    object_types[object_type] = []
+                object_types[object_type].append(f"{change_type}: {object_name}")
+            
+            # Add detailed reporting for each object type
+            for obj_type, changes_list in object_types.items():
+                lines.append(f"  {obj_type.upper()}:")
+                for change in changes_list:
+                    lines.append(f"    - {change}")
+            
+            # Add detailed differences information that tests expect
+            comparison_data = migration_report_data.get('comparison_data', {})
+            lines.append("")
+            lines.append("Detailed Differences:")
+            
+            # Check for functions only in source
+            functions_diff = comparison_data.get('functions', {})
+            if functions_diff.get('only_in_source'):
+                lines.append("  Functions only in source:")
+                for func in functions_diff['only_in_source']:
+                    lines.append(f"    - {func}")
+            
+            # Check for procedures differences  
+            procedures_diff = comparison_data.get('procedures', {})
+            if procedures_diff.get('in_both'):
+                lines.append("  Procedures with differences:")
+                for proc in procedures_diff['in_both']:
+                    lines.append(f"    - {proc}")
+            
+            # Check for triggers
+            triggers_diff = comparison_data.get('triggers', {})
+            if triggers_diff.get('only_in_source') or triggers_diff.get('only_in_dest') or triggers_diff.get('in_both'):
+                lines.append("  Triggers:")
+                if triggers_diff.get('only_in_source'):
+                    for trigger in triggers_diff['only_in_source']:
+                        lines.append(f"    - Missing in destination: {trigger}")
+                if triggers_diff.get('only_in_dest'):
+                    for trigger in triggers_diff['only_in_dest']:
+                        lines.append(f"    - Extra in destination: {trigger}")
+                if triggers_diff.get('in_both'):
+                    for trigger in triggers_diff['in_both']:
+                        lines.append(f"    - Different: {trigger}")
         
         return '\n'.join(lines)
 

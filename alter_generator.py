@@ -52,6 +52,21 @@ class AlterStatementGenerator:
                 rollback_statements.append(f"ALTER TABLE `{table_name}` DROP INDEX `{diff.get('index_name')}`")
             elif diff_type == ChangeType.REMOVE_INDEX.value:
                 rollback_statements.append(f"ALTER TABLE `{table_name}` ADD {diff.get('index_definition', '')}")
+            elif diff_type == ChangeType.ADD_CONSTRAINT.value:
+                # To rollback adding a constraint, we drop it
+                constraint_name = diff.get('constraint_name', '')
+                rollback_statements.append(f"ALTER TABLE `{table_name}` DROP FOREIGN KEY `{constraint_name}`")
+            elif diff_type == ChangeType.REMOVE_CONSTRAINT.value:
+                # To rollback removing a constraint, we add it back
+                constraint_def = diff.get('constraint_definition', '')
+                rollback_statements.append(f"ALTER TABLE `{table_name}` ADD {constraint_def}")
+            elif diff_type == ChangeType.MODIFY_CONSTRAINT.value:
+                # To rollback modifying a constraint, we restore the original
+                constraint_name = diff.get('constraint_name', '')
+                original_def = diff.get('original_definition', '')
+                # Drop the modified constraint and restore the original
+                rollback_statements.append(f"ALTER TABLE `{table_name}` DROP FOREIGN KEY `{constraint_name}`")
+                rollback_statements.append(f"ALTER TABLE `{table_name}` ADD {original_def}")
         
         return rollback_statements
     
@@ -91,6 +106,12 @@ class AlterStatementGenerator:
                 report_lines.append(f"  {i}. Index ADDED: {diff.get('index_name', 'unknown')}")
             elif diff_type == ChangeType.REMOVE_INDEX.value:
                 report_lines.append(f"  {i}. Index REMOVED: {diff.get('index_name', 'unknown')}")
+            elif diff_type == ChangeType.ADD_CONSTRAINT.value:
+                report_lines.append(f"  {i}. Foreign Key ADDED: {diff.get('constraint_name', 'unknown')}")
+            elif diff_type == ChangeType.REMOVE_CONSTRAINT.value:
+                report_lines.append(f"  {i}. Foreign Key REMOVED: {diff.get('constraint_name', 'unknown')}")
+            elif diff_type == ChangeType.MODIFY_CONSTRAINT.value:
+                report_lines.append(f"  {i}. Foreign Key MODIFIED: {diff.get('constraint_name', 'unknown')}")
             else:
                 report_lines.append(f"  {i}. Unknown difference type: {diff_type}")
         
@@ -133,5 +154,17 @@ class AlterStatementGenerator:
             elif diff_type == ChangeType.REMOVE_INDEX.value:
                 idx_name = diff.get('index_name', '')
                 alter_statements.append(f"ALTER TABLE `{table_name}` DROP INDEX `{idx_name}`")
+            elif diff_type == ChangeType.ADD_CONSTRAINT.value:
+                constraint_def = diff.get('constraint_definition', '')
+                alter_statements.append(f"ALTER TABLE `{table_name}` ADD {constraint_def}")
+            elif diff_type == ChangeType.REMOVE_CONSTRAINT.value:
+                constraint_name = diff.get('constraint_name', '')
+                alter_statements.append(f"ALTER TABLE `{table_name}` DROP FOREIGN KEY `{constraint_name}`")
+            elif diff_type == ChangeType.MODIFY_CONSTRAINT.value:
+                constraint_name = diff.get('constraint_name', '')
+                constraint_def = diff.get('new_definition', '')
+                # For modifying a constraint, we need to drop and recreate it
+                alter_statements.append(f"ALTER TABLE `{table_name}` DROP FOREIGN KEY `{constraint_name}`")
+                alter_statements.append(f"ALTER TABLE `{table_name}` ADD {constraint_def}")
         
         return alter_statements

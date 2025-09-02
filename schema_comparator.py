@@ -111,6 +111,45 @@ class SchemaComparator:
                 'description': f"Remove index '{idx_name}'"
             })
         
+        # Parse and compare foreign keys
+        source_foreign_keys = self._parse_foreign_keys(source_ddl)
+        dest_foreign_keys = self._parse_foreign_keys(dest_ddl)
+        
+        source_fk_names = set(source_foreign_keys.keys())
+        dest_fk_names = set(dest_foreign_keys.keys())
+        
+        # Foreign keys only in source (need to be added)
+        for fk_name in source_fk_names - dest_fk_names:
+            differences.append({
+                'type': ChangeType.ADD_CONSTRAINT.value,
+                'constraint_name': fk_name,
+                'constraint_definition': source_foreign_keys[fk_name],
+                'description': f"Add foreign key constraint '{fk_name}'"
+            })
+        
+        # Foreign keys only in dest (need to be removed)
+        for fk_name in dest_fk_names - source_fk_names:
+            differences.append({
+                'type': ChangeType.REMOVE_CONSTRAINT.value,
+                'constraint_name': fk_name,
+                'constraint_definition': dest_foreign_keys[fk_name],
+                'description': f"Remove foreign key constraint '{fk_name}'"
+            })
+        
+        # Foreign keys in both (check for modifications)
+        for fk_name in source_fk_names & dest_fk_names:
+            source_def = source_foreign_keys[fk_name].strip()
+            dest_def = dest_foreign_keys[fk_name].strip()
+            
+            if source_def != dest_def:
+                differences.append({
+                    'type': ChangeType.MODIFY_CONSTRAINT.value,
+                    'constraint_name': fk_name,
+                    'original_definition': dest_def,
+                    'new_definition': source_def,
+                    'description': f"Modify foreign key constraint '{fk_name}'"
+                })
+        
         return differences
     
     def _parse_columns(self, ddl: str) -> Dict[str, str]:
@@ -188,6 +227,11 @@ class SchemaComparator:
             if not part:
                 continue
             
+            # Skip foreign key constraints - they are handled separately
+            if re.match(r'^\s*CONSTRAINT.*FOREIGN\s+KEY', part, re.IGNORECASE) or \
+               re.match(r'^\s*FOREIGN\s+KEY', part, re.IGNORECASE):
+                continue
+            
             # Look for KEY or INDEX definitions
             key_match = re.match(r'^\s*(UNIQUE\s+)?(KEY|INDEX)\s+`?([a-zA-Z_][a-zA-Z0-9_]*)`?\s*\((.*)\)', part, re.IGNORECASE)
             if key_match:
@@ -200,6 +244,74 @@ class SchemaComparator:
                 indexes[index_name] = index_def.strip()
         
         return indexes
+    
+    def _parse_foreign_keys(self, ddl: str) -> Dict[str, str]:
+        """
+        Parse foreign key constraint definitions from CREATE TABLE DDL.
+        
+        Args:
+            ddl: The CREATE TABLE DDL statement
+            
+        Returns:
+            Dictionary mapping foreign key names to their definitions
+        """
+        foreign_keys = {}
+        
+        # Remove comments and normalize whitespace
+        ddl_clean = re.sub(r'--[^\n]*', '', ddl)
+        ddl_clean = re.sub(r'/\*.*?\*/', '', ddl_clean, flags=re.DOTALL)
+        
+        # Find the column definitions inside the CREATE TABLE statement
+        create_match = re.search(r'CREATE\s+TABLE[^(]*\((.*)\)', ddl_clean, re.IGNORECASE | re.DOTALL)
+        if not create_match:
+            return foreign_keys
+        
+        columns_section = create_match.group(1)
+        
+        # Split by commas, but be careful about commas inside parentheses
+        parts = self._split_sql_parts(columns_section)
+        
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+            
+            # Look for CONSTRAINT ... FOREIGN KEY definitions
+            constraint_fk_match = re.match(
+                r'^\s*CONSTRAINT\s+`?([a-zA-Z_][a-zA-Z0-9_]*)`?\s+FOREIGN\s+KEY\s*\((.*?)\)\s+REFERENCES\s+`?([a-zA-Z_][a-zA-Z0-9_]*)`?\s*\((.*?)\)(.*)$',
+                part, re.IGNORECASE
+            )
+            if constraint_fk_match:
+                fk_name = constraint_fk_match.group(1)
+                local_columns = constraint_fk_match.group(2)
+                ref_table = constraint_fk_match.group(3)
+                ref_columns = constraint_fk_match.group(4)
+                on_clauses = constraint_fk_match.group(5).strip()
+                
+                fk_def = f"CONSTRAINT `{fk_name}` FOREIGN KEY ({local_columns}) REFERENCES `{ref_table}` ({ref_columns})"
+                if on_clauses:
+                    fk_def += f" {on_clauses}"
+                foreign_keys[fk_name] = fk_def.strip()
+                continue
+            
+            # Look for inline FOREIGN KEY definitions (without CONSTRAINT)
+            inline_fk_match = re.match(
+                r'^\s*FOREIGN\s+KEY\s+`?([a-zA-Z_][a-zA-Z0-9_]*)`?\s*\((.*?)\)\s+REFERENCES\s+`?([a-zA-Z_][a-zA-Z0-9_]*)`?\s*\((.*?)\)(.*)$',
+                part, re.IGNORECASE
+            )
+            if inline_fk_match:
+                fk_name = inline_fk_match.group(1)
+                local_columns = inline_fk_match.group(2)
+                ref_table = inline_fk_match.group(3)
+                ref_columns = inline_fk_match.group(4)
+                on_clauses = inline_fk_match.group(5).strip()
+                
+                fk_def = f"FOREIGN KEY `{fk_name}` ({local_columns}) REFERENCES `{ref_table}` ({ref_columns})"
+                if on_clauses:
+                    fk_def += f" {on_clauses}"
+                foreign_keys[fk_name] = fk_def.strip()
+        
+        return foreign_keys
     
     def _split_sql_parts(self, sql: str) -> List[str]:
         """
@@ -491,8 +603,59 @@ class SchemaComparator:
                     except Exception:
                         sql_lines.append(f"-- ERROR: Failed to process function {func_name}")
         
+        # Process trigger changes
+        if 'triggers' in comparison:
+            triggers_comparison = comparison['triggers']
+            if (triggers_comparison.get('only_in_source') or 
+                triggers_comparison.get('only_in_dest') or 
+                triggers_comparison.get('in_both')):
+                
+                sql_lines.extend([
+                    "",
+                    "-- TRIGGERS CHANGES", 
+                    "--" + "-" * 48
+                ])
+                
+                # Triggers only in source (to be created)
+                for trigger_name in triggers_comparison.get('only_in_source', []):
+                    try:
+                        source_ddl = get_source_ddl('triggers', trigger_name)
+                        if source_ddl:
+                            sql_lines.append(f"-- Create trigger: {trigger_name}")
+                            sql_lines.append(f"DROP TRIGGER IF EXISTS `{dest_schema}`.`{trigger_name}`;")
+                            adapted_ddl = self._adapt_ddl_for_destination(source_ddl, dest_schema)
+                            sql_lines.append(adapted_ddl)
+                            sql_lines.append("")
+                    except Exception:
+                        sql_lines.append(f"-- ERROR: Failed to process trigger {trigger_name}")
+                
+                # Triggers only in dest (to be dropped)
+                for trigger_name in triggers_comparison.get('only_in_dest', []):
+                    sql_lines.append(f"-- Drop trigger: {trigger_name}")
+                    sql_lines.append(f"DROP TRIGGER IF EXISTS `{dest_schema}`.`{trigger_name}`;")
+                    sql_lines.append("")
+                
+                # Triggers in both (to be updated)
+                for trigger_name in triggers_comparison.get('in_both', []):
+                    try:
+                        source_ddl = get_source_ddl('triggers', trigger_name)
+                        dest_ddl = get_dest_ddl('triggers', trigger_name)
+                        
+                        # Normalize whitespace for comparison
+                        source_normalized = ' '.join(source_ddl.split()) if source_ddl else ''
+                        dest_normalized = ' '.join(dest_ddl.split()) if dest_ddl else ''
+                        
+                        if source_normalized != dest_normalized:
+                            sql_lines.append(f"-- Update trigger: {trigger_name}")
+                            sql_lines.append(f"DROP TRIGGER IF EXISTS `{dest_schema}`.`{trigger_name}`;")
+                            adapted_ddl = self._adapt_ddl_for_destination(source_ddl, dest_schema)
+                            sql_lines.append(adapted_ddl)
+                            sql_lines.append("")
+                    except Exception:
+                        sql_lines.append(f"-- ERROR: Failed to process trigger {trigger_name}")
+        
         # Add sections for unchanged objects to show what DDL Wizard can compare
-        object_types = ['triggers', 'events']
+        object_types = ['events']
         
         for obj_type in object_types:
             obj_type_upper = obj_type.upper()
