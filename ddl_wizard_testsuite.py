@@ -10,6 +10,7 @@ import os
 import time
 import logging
 import subprocess
+import shutil
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
@@ -19,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     import pymysql
     from database import DatabaseManager
-    from main import main as ddl_wizard_main
+    from ddl_wizard import main as ddl_wizard_main
 except ImportError as e:
     print(f"❌ Error importing required modules: {e}")
     print("💡 Make sure you have installed requirements: pip install -r requirements.txt")
@@ -750,9 +751,13 @@ class DDLWizardTester:
             migration_file = Path('./test_output_post_migration/migration.sql')
             if migration_file.exists():
                 content = migration_file.read_text().strip()
-                # Remove comments and empty lines
+                # Remove comments, empty lines, and standard setup/cleanup statements
                 meaningful_lines = [line.strip() for line in content.split('\n') 
-                                 if line.strip() and not line.strip().startswith('--')]
+                                 if line.strip() and 
+                                    not line.strip().startswith('--') and
+                                    not line.strip().startswith('SET FOREIGN_KEY_CHECKS') and
+                                    not line.strip() == 'SET FOREIGN_KEY_CHECKS = 0;' and
+                                    not line.strip() == 'SET FOREIGN_KEY_CHECKS = 1;']
                 
                 if meaningful_lines:
                     self.logger.warning("⚠️  Schemas are not identical - found differences after migration")
@@ -830,6 +835,94 @@ class DDLWizardTester:
             print(f"\n⚠️  {final_total - final_passed} tests failed. Please review the logs and output files.")
         
         print("="*80)
+    
+    def save_test_data(self):
+        """Save test output files to test_data directory for reference."""
+        self.logger.info("💾 Saving test data for reference...")
+        
+        try:
+            # Create test_data directory
+            test_data_dir = Path("./test_data")
+            test_data_dir.mkdir(exist_ok=True)
+            
+            # Create timestamp for this test run
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            
+            # Create main run directory
+            run_dir = test_data_dir / f"ddlw-test-{timestamp}"
+            run_dir.mkdir(exist_ok=True)
+            
+            # List of test output directories to save with their descriptive names
+            output_dirs = [
+                ("./test_output", "initial-migration"),
+                ("./test_output_post_migration", "post-migration-verification"), 
+                ("./test_output_final", "rollback-verification")
+            ]
+            
+            # Copy each output directory if it exists to its own subfolder under the run directory
+            saved_dirs = []
+            for output_dir, test_name in output_dirs:
+                output_path = Path(output_dir)
+                if output_path.exists():
+                    # Create individual subfolder with descriptive name under the run directory
+                    dest_dir_name = f"ddl-wizard-testsuite-{test_name}-{timestamp}"
+                    dest_path = run_dir / dest_dir_name
+                    
+                    # Copy the entire directory
+                    shutil.copytree(output_path, dest_path, dirs_exist_ok=True)
+                    self.logger.info(f"✅ Saved {output_dir} to {dest_path}")
+                    saved_dirs.append((output_dir, dest_dir_name))
+                    
+                    # Also copy with original directory name for direct reference
+                    original_dest_path = run_dir / output_path.name
+                    shutil.copytree(output_path, original_dest_path, dirs_exist_ok=True)
+                    self.logger.info(f"✅ Saved {output_dir} to {original_dest_path}")
+            
+            # Also copy the test log to the main run directory
+            log_file = Path("ddl_wizard_test.log")
+            if log_file.exists():
+                shutil.copy2(log_file, run_dir / "ddl_wizard_test.log")
+                self.logger.info(f"✅ Saved test log to {run_dir}")
+            
+            # Create a summary file in the main run directory
+            if saved_dirs:
+                summary_file = run_dir / "test_summary.txt"
+                with open(summary_file, 'w') as f:
+                    f.write(f"DDL Wizard Test Run Summary\n")
+                    f.write(f"========================\n")
+                    f.write(f"Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write(f"Source DB: {self.source_config['host']}:{self.source_config['port']}\n")
+                    f.write(f"Dest DB: {self.dest_config['host']}:{self.dest_config['port']}\n")
+                    f.write(f"Test Results: See ddl_wizard_test.log for details\n")
+                    f.write(f"\nTest Directories Created:\n")
+                    for output_dir, dest_name in saved_dirs:
+                        f.write(f"- {output_dir}/ -> {dest_name}/\n")
+                        f.write(f"- {output_dir}/ -> {Path(output_dir).name}/\n")
+            
+            # Clean up temporary test output directories after copying
+            for output_dir, _ in output_dirs:
+                output_path = Path(output_dir)
+                if output_path.exists():
+                    try:
+                        shutil.rmtree(output_path)
+                        self.logger.info(f"🧹 Cleaned up temporary directory: {output_dir}")
+                    except Exception as e:
+                        self.logger.warning(f"⚠️  Could not remove {output_dir}: {e}")
+            
+            if saved_dirs:
+                print(f"💾 Test data saved to: {run_dir}")
+                print(f"📁 Test directories created:")
+                for _, dest_name in saved_dirs:
+                    print(f"   📁 {dest_name}")
+                print(f"📁 Original test_output_* directories also preserved")
+                print(f"🧹 Temporary test directories cleaned up")
+                print(f"📁 Reference files preserved for analysis")
+            else:
+                print(f"⚠️  No test output directories found to save")
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error saving test data: {e}")
+            print(f"⚠️  Warning: Could not save test data: {e}")
     
     def cleanup_databases(self):
         """Clean up test databases."""
@@ -950,6 +1043,9 @@ class DDLWizardTester:
             
             # Print comprehensive summary
             self.print_test_summary(initial_results, round_trip_results)
+            
+            # Save test data for reference
+            self.save_test_data()
             
         except Exception as e:
             self.logger.error(f"❌ Round-trip test suite failed: {e}")

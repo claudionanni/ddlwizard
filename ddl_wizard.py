@@ -38,14 +38,50 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
     """Generate detailed rollback SQL for all schema changes."""
     rollback_lines = []
     
-    # Add header comment
-    rollback_lines.append("-- Detailed rollback for all schema changes")
-    rollback_lines.append("")
+    # Add header comment with proper formatting similar to migration script
+    from datetime import datetime
+    rollback_lines.extend([
+        "-- DDL Wizard Rollback Script",
+        f"-- Source Schema: {getattr(alter_generator, 'dest_schema', 'unknown')}",
+        f"-- Destination Schema: {getattr(alter_generator, 'dest_schema', 'unknown')}",
+        f"-- Generated: {datetime.now().isoformat()}",
+        "",
+        "-- WARNING: Review this script carefully before executing!",
+        "-- This script will revert changes made by the migration script.",
+        "",
+        "SET FOREIGN_KEY_CHECKS = 0;",
+        "",
+        "-- Detailed rollback for all schema changes",
+        ""
+    ])
     
     # Process tables that exist in both and may have structural differences
     if 'tables' in comparison:
         tables_comparison = comparison['tables']
         
+        # Handle tables that were dropped in migration (only in dest - need to be recreated)
+        for table_name in tables_comparison.get('only_in_dest', []):
+            try:
+                dest_ddl = get_dest_ddl('tables', table_name)
+                if dest_ddl:
+                    rollback_lines.append(f"-- Rollback table drop: {table_name}")
+                    rollback_lines.append(dest_ddl + ";")
+                    rollback_lines.append("")
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to recreate table {table_name}: {str(e)}")
+                continue
+        
+        # Handle tables that were created in migration (only in source - need to be dropped)
+        for table_name in tables_comparison.get('only_in_source', []):
+            try:
+                rollback_lines.append(f"-- Rollback table creation: {table_name}")
+                rollback_lines.append(f"DROP TABLE IF EXISTS `{table_name}`;")
+                rollback_lines.append("")
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to drop table {table_name}: {str(e)}")
+                continue
+        
+        # Handle tables that exist in both and may have structural differences
         for table_name in comparison['tables'].get('in_both', []):
             try:
                 # Fetch DDL directly from the database connections
@@ -169,6 +205,14 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
             except Exception as e:
                 rollback_lines.append(f"-- ERROR: Failed to restore function {func_name}: {str(e)}")
                 continue
+    
+    # Add closing statements
+    rollback_lines.extend([
+        "",
+        "SET FOREIGN_KEY_CHECKS = 1;",
+        "",
+        "-- Rollback script completed."
+    ])
     
     return rollback_lines
 

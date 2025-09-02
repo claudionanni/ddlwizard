@@ -296,12 +296,61 @@ python ddl_wizard.py compare --source-host ... --dest-host ...
 
 ### Testing
 ```bash
-# Run test suite
+# Run comprehensive test suite
 python ddl_wizard_testsuite.py
+
+# Run with specific database connections
+python ddl_wizard_testsuite.py --host localhost --port 3306 --user root --password secret
 
 # Test specific functionality
 python -m pytest tests/
 ```
+
+### Test Data Preservation
+The test suite automatically saves all generated SQL scripts and test results to organized directories under `test_data/` for reference, then cleans up temporary files:
+
+```
+test_data/
+└── ddlw-test-20250902_115230/
+    ├── test_summary.txt              # Test run summary
+    ├── ddl_wizard_test.log           # Detailed test log
+    ├── test_output/                  # Original test directory names
+    ├── test_output_post_migration/   # (for direct reference)
+    ├── test_output_final/            # 
+    ├── ddl-wizard-testsuite-initial-migration-20250902_115230/
+    │   ├── migration.sql             # Generated migration script
+    │   ├── rollback.sql              # Generated rollback script
+    │   ├── migration_report.md       # Detailed migration report
+    │   └── comparison_report.txt     # Schema comparison details
+    ├── ddl-wizard-testsuite-post-migration-verification-20250902_115230/
+    │   ├── migration.sql             # Post-migration verification files
+    │   ├── rollback.sql              # (should be minimal/empty)
+    │   └── migration_report.md       # Post-migration analysis
+    └── ddl-wizard-testsuite-rollback-verification-20250902_115230/
+        ├── migration.sql             # Final verification files  
+        ├── rollback.sql              # (should match initial state)
+        └── migration_report.md       # Rollback verification results
+```
+
+**Cleanup Process**: After preserving all test data, temporary `test_output*` directories are automatically removed from the working directory to keep it clean.
+
+Each test run gets its own main directory (`ddlw-test-<timestamp>`) containing:
+- **Main Directory**: Contains test summary and log files for the entire run
+- **Original Test Directories**: Preserved with their original names (`test_output*`) for direct reference
+- **Descriptive Test Directories**: Renamed with clear phase descriptions for better organization
+  - **initial-migration**: Original migration generation and analysis
+  - **post-migration-verification**: Files generated after applying migration
+  - **rollback-verification**: Files generated after applying rollback
+
+This preserved test data allows you to:
+- **Review Generated SQL**: Examine migration and rollback scripts for each phase
+- **Analyze Test Results**: Debug failed tests and understand schema changes at each step
+- **Reference Examples**: Use as templates for manual migrations
+- **Track Changes**: Compare different test runs and phases over time
+- **Understand Workflow**: See exactly what happens at each stage of the migration cycle
+- **Organized Analysis**: All files from a single test run are grouped together
+- **Direct Access**: Use original directory names for familiar navigation
+- **Clean Workspace**: Temporary directories are cleaned up after each run
 
 ## 🤝 Contributing
 

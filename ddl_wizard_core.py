@@ -491,6 +491,7 @@ class DDLWizardCore:
         migration_file = output_path / self.config.output.migration_file
         rollback_file = output_path / self.config.output.rollback_file
         migration_report_path = output_path / "migration_report.md"
+        comparison_report_path = output_path / "comparison_report.txt"
         
         migration_file.write_text(migration_sql)
         rollback_file.write_text(rollback_sql)
@@ -498,7 +499,37 @@ class DDLWizardCore:
         # Generate migration report
         generate_migration_report(migration_report_data, str(migration_report_path))
         
+        # Generate comparison report
+        comparison_summary = self._generate_comparison_summary(migration_report_data)
+        comparison_report_path.write_text(comparison_summary)
+        
         return str(migration_file), str(rollback_file), str(migration_report_path)
+    
+    def _generate_comparison_summary(self, migration_report_data: Dict) -> str:
+        """Generate a simple text summary of the comparison."""
+        lines = [
+            "DDL Wizard Schema Comparison Report",
+            "=" * 40,
+            f"Source Schema: {migration_report_data.get('source_schema', 'unknown')}",
+            f"Destination Schema: {migration_report_data.get('dest_schema', 'unknown')}",
+            f"Generated: {migration_report_data.get('timestamp', 'unknown')}",
+            "",
+            f"Total Operations: {len(migration_report_data.get('detailed_changes', []))}",
+            f"Safety Warnings: {len(migration_report_data.get('safety_warnings', []))}",
+            "",
+            "Changes Summary:",
+        ]
+        
+        changes = migration_report_data.get('detailed_changes', [])
+        if not changes:
+            lines.append("  No changes detected")
+        else:
+            for change in changes:
+                change_type = change.get('operation', 'unknown')
+                object_name = change.get('object_name', 'unknown')
+                lines.append(f"  - {change_type}: {object_name}")
+        
+        return '\n'.join(lines)
 
 
 def run_complete_migration(source_config: DatabaseConfig, dest_config: DatabaseConfig, 

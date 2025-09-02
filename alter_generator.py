@@ -41,9 +41,13 @@ class AlterStatementGenerator:
             if diff_type == ChangeType.ADD_COLUMN.value:
                 rollback_statements.append(f"ALTER TABLE `{table_name}` DROP COLUMN `{diff.get('column_name')}`")
             elif diff_type == ChangeType.REMOVE_COLUMN.value:
-                rollback_statements.append(f"ALTER TABLE `{table_name}` ADD COLUMN {diff.get('column_definition', '')}")
+                col_name = diff.get('column_name', '')
+                col_def = diff.get('column_definition', '')
+                rollback_statements.append(f"ALTER TABLE `{table_name}` ADD COLUMN `{col_name}` {col_def}")
             elif diff_type == ChangeType.MODIFY_COLUMN.value:
-                rollback_statements.append(f"ALTER TABLE `{table_name}` MODIFY COLUMN {diff.get('original_definition', '')}")
+                col_name = diff.get('column_name', '')
+                orig_def = diff.get('original_definition', '')
+                rollback_statements.append(f"ALTER TABLE `{table_name}` MODIFY COLUMN `{col_name}` {orig_def}")
             elif diff_type == ChangeType.ADD_INDEX.value:
                 rollback_statements.append(f"ALTER TABLE `{table_name}` DROP INDEX `{diff.get('index_name')}`")
             elif diff_type == ChangeType.REMOVE_INDEX.value:
@@ -113,8 +117,9 @@ class AlterStatementGenerator:
             
             # Generate basic ALTER statements based on difference type
             if diff_type == ChangeType.ADD_COLUMN.value:
+                col_name = diff.get('column_name', '')
                 col_def = diff.get('column_definition', '')
-                alter_statements.append(f"ALTER TABLE `{table_name}` ADD COLUMN {col_def}")
+                alter_statements.append(f"ALTER TABLE `{table_name}` ADD COLUMN `{col_name}` {col_def}")
             elif diff_type == ChangeType.REMOVE_COLUMN.value:
                 col_name = diff.get('column_name', '')
                 alter_statements.append(f"ALTER TABLE `{table_name}` DROP COLUMN `{col_name}`")

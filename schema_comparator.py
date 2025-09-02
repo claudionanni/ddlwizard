@@ -258,6 +258,38 @@ class SchemaComparator:
         
         return comparison
     
+    def _adapt_ddl_for_destination(self, ddl: str, dest_schema: str) -> str:
+        """Adapt DDL for destination schema with proper delimiter handling."""
+        if not ddl:
+            return ""
+        
+        adapted_ddl = ddl.strip()
+        
+        # Check if this is a stored procedure, function, or trigger
+        ddl_upper = adapted_ddl.upper()
+        # Use regex to handle DEFINER clauses between CREATE and object type
+        import re
+        is_stored_object = bool(re.search(r'CREATE\s+(?:DEFINER[^)]*\)?\s+)?(FUNCTION|PROCEDURE|TRIGGER)', ddl_upper))
+        
+        if is_stored_object:
+            # For stored procedures, functions, and triggers, we need to:
+            # 1. Ensure proper semicolons within the body
+            # 2. Wrap with DELIMITER commands
+            
+            # For stored objects, we don't modify semicolons - just wrap with DELIMITER
+            # Remove trailing semicolon if present (will be replaced with $$)
+            if adapted_ddl.endswith(';'):
+                adapted_ddl = adapted_ddl[:-1]
+            
+            # Wrap with DELIMITER commands and add $$ terminator
+            result = f"DELIMITER $$\n{adapted_ddl}$$\nDELIMITER ;"
+            return result
+        else:
+            # For regular DDL (tables, etc.), ensure proper semicolon
+            if not adapted_ddl.endswith(';'):
+                adapted_ddl += ';'
+            return adapted_ddl
+    
     def compare_objects(self, source_objects: Dict[str, List[Dict]], dest_objects: Dict[str, List[Dict]]) -> Dict[str, Any]:
         """
         Compare database objects and return comparison results.
@@ -377,7 +409,8 @@ class SchemaComparator:
                     if source_ddl:
                         sql_lines.append(f"-- Create procedure: {proc_name}")
                         sql_lines.append(f"DROP PROCEDURE IF EXISTS `{dest_schema}`.`{proc_name}`;")
-                        sql_lines.append(source_ddl + ";")
+                        adapted_ddl = self._adapt_ddl_for_destination(source_ddl, dest_schema)
+                        sql_lines.append(adapted_ddl)
                         sql_lines.append("")
                 except Exception:
                     sql_lines.append(f"-- ERROR: Failed to process procedure {proc_name}")
@@ -393,10 +426,16 @@ class SchemaComparator:
                 try:
                     source_ddl = get_source_ddl('procedures', proc_name)
                     dest_ddl = get_dest_ddl('procedures', proc_name)
-                    if source_ddl and dest_ddl and source_ddl.strip() != dest_ddl.strip():
+                    
+                    # Normalize whitespace for comparison
+                    source_normalized = ' '.join(source_ddl.split()) if source_ddl else ''
+                    dest_normalized = ' '.join(dest_ddl.split()) if dest_ddl else ''
+                    
+                    if source_normalized != dest_normalized:
                         sql_lines.append(f"-- Update procedure: {proc_name}")
                         sql_lines.append(f"DROP PROCEDURE IF EXISTS `{dest_schema}`.`{proc_name}`;")
-                        sql_lines.append(source_ddl + ";")
+                        adapted_ddl = self._adapt_ddl_for_destination(source_ddl, dest_schema)
+                        sql_lines.append(adapted_ddl)
                         sql_lines.append("")
                 except Exception:
                     sql_lines.append(f"-- ERROR: Failed to process procedure {proc_name}")
@@ -421,7 +460,8 @@ class SchemaComparator:
                         if source_ddl:
                             sql_lines.append(f"-- Create function: {func_name}")
                             sql_lines.append(f"DROP FUNCTION IF EXISTS `{dest_schema}`.`{func_name}`;")
-                            sql_lines.append(source_ddl + ";")
+                            adapted_ddl = self._adapt_ddl_for_destination(source_ddl, dest_schema)
+                            sql_lines.append(adapted_ddl)
                             sql_lines.append("")
                     except Exception:
                         sql_lines.append(f"-- ERROR: Failed to process function {func_name}")
@@ -437,13 +477,42 @@ class SchemaComparator:
                     try:
                         source_ddl = get_source_ddl('functions', func_name)
                         dest_ddl = get_dest_ddl('functions', func_name)
-                        if source_ddl and dest_ddl and source_ddl.strip() != dest_ddl.strip():
+                        
+                        # Normalize whitespace for comparison
+                        source_normalized = ' '.join(source_ddl.split()) if source_ddl else ''
+                        dest_normalized = ' '.join(dest_ddl.split()) if dest_ddl else ''
+                        
+                        if source_normalized != dest_normalized:
                             sql_lines.append(f"-- Update function: {func_name}")
                             sql_lines.append(f"DROP FUNCTION IF EXISTS `{dest_schema}`.`{func_name}`;")
-                            sql_lines.append(source_ddl + ";")
+                            adapted_ddl = self._adapt_ddl_for_destination(source_ddl, dest_schema)
+                            sql_lines.append(adapted_ddl)
                             sql_lines.append("")
                     except Exception:
                         sql_lines.append(f"-- ERROR: Failed to process function {func_name}")
+        
+        # Add sections for unchanged objects to show what DDL Wizard can compare
+        object_types = ['triggers', 'events']
+        
+        for obj_type in object_types:
+            obj_type_upper = obj_type.upper()
+            sql_lines.extend([
+                "",
+                f"-- {obj_type_upper} CHANGES",
+                "--" + "-" * 48
+            ])
+            
+            if obj_type in comparison and (
+                comparison[obj_type].get('only_in_source') or 
+                comparison[obj_type].get('only_in_dest') or 
+                comparison[obj_type].get('in_both')
+            ):
+                # This object type has changes - would be handled above
+                # For now, just show placeholder since we don't fully implement all types yet
+                sql_lines.append("-- (Changes for this object type not yet implemented)")
+            else:
+                sql_lines.append("-- <none>")
+            sql_lines.append("")
         
         sql_lines.extend([
             "",
