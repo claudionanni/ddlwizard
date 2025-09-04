@@ -72,44 +72,93 @@ class DatabaseManager:
         try:
             with self._get_connection() as conn:
                 with conn.cursor() as cursor:
-                    # Get tables (excluding views)
+                    # Get tables (excluding views) with DDL
                     cursor.execute(f"SHOW FULL TABLES FROM `{self.config.schema}` WHERE Table_type = 'BASE TABLE'")
                     tables = cursor.fetchall()
-                    objects['tables'] = [{'name': list(table.values())[0]} for table in tables]
+                    for table in tables:
+                        table_name = list(table.values())[0]
+                        try:
+                            ddl = self.get_table_ddl(table_name)
+                            objects['tables'].append({'name': table_name, 'ddl': ddl})
+                        except Exception as e:
+                            print(f"Warning: Failed to get DDL for table {table_name}: {e}")
+                            objects['tables'].append({'name': table_name, 'ddl': ''})
                     
-                    # Get views
+                    # Get views with DDL
                     cursor.execute(f"SHOW FULL TABLES FROM `{self.config.schema}` WHERE Table_type = 'VIEW'")
                     views = cursor.fetchall()
-                    objects['views'] = [{'name': list(view.values())[0]} for view in views]
+                    for view in views:
+                        view_name = list(view.values())[0]
+                        try:
+                            ddl = self.get_view_ddl(view_name)
+                            objects['views'].append({'name': view_name, 'ddl': ddl})
+                        except Exception as e:
+                            print(f"Warning: Failed to get DDL for view {view_name}: {e}")
+                            objects['views'].append({'name': view_name, 'ddl': ''})
                     
-                    # Get sequences (MariaDB 10.3+)
+                    # Get sequences (MariaDB 10.3+) with DDL
                     try:
                         cursor.execute(f"SHOW FULL TABLES FROM `{self.config.schema}` WHERE Table_type = 'SEQUENCE'")
                         sequences = cursor.fetchall()
-                        objects['sequences'] = [{'name': list(seq.values())[0]} for seq in sequences]
+                        for seq in sequences:
+                            seq_name = list(seq.values())[0]
+                            try:
+                                ddl = self.get_sequence_ddl(seq_name)
+                                objects['sequences'].append({'name': seq_name, 'ddl': ddl})
+                            except Exception as e:
+                                print(f"Warning: Failed to get DDL for sequence {seq_name}: {e}")
+                                objects['sequences'].append({'name': seq_name, 'ddl': ''})
                     except Exception:
                         # Sequences not supported in this MariaDB version
                         objects['sequences'] = []
                     
-                    # Get procedures
+                    # Get procedures with DDL
                     cursor.execute(f"SHOW PROCEDURE STATUS WHERE Db = '{self.config.schema}'")
                     procedures = cursor.fetchall()
-                    objects['procedures'] = [{'name': proc['Name']} for proc in procedures]
+                    for proc in procedures:
+                        proc_name = proc['Name']
+                        try:
+                            ddl = self.get_procedure_ddl(proc_name)
+                            objects['procedures'].append({'name': proc_name, 'ddl': ddl})
+                        except Exception as e:
+                            print(f"Warning: Failed to get DDL for procedure {proc_name}: {e}")
+                            objects['procedures'].append({'name': proc_name, 'ddl': ''})
                     
-                    # Get functions
+                    # Get functions with DDL
                     cursor.execute(f"SHOW FUNCTION STATUS WHERE Db = '{self.config.schema}'")
                     functions = cursor.fetchall()
-                    objects['functions'] = [{'name': func['Name']} for func in functions]
+                    for func in functions:
+                        func_name = func['Name']
+                        try:
+                            ddl = self.get_function_ddl(func_name)
+                            objects['functions'].append({'name': func_name, 'ddl': ddl})
+                        except Exception as e:
+                            print(f"Warning: Failed to get DDL for function {func_name}: {e}")
+                            objects['functions'].append({'name': func_name, 'ddl': ''})
                     
-                    # Get triggers
+                    # Get triggers with DDL
                     cursor.execute(f"SHOW TRIGGERS FROM `{self.config.schema}`")
                     triggers = cursor.fetchall()
-                    objects['triggers'] = [{'name': trigger['Trigger']} for trigger in triggers]
+                    for trigger in triggers:
+                        trigger_name = trigger['Trigger']
+                        try:
+                            ddl = self.get_trigger_ddl(trigger_name)
+                            objects['triggers'].append({'name': trigger_name, 'ddl': ddl})
+                        except Exception as e:
+                            print(f"Warning: Failed to get DDL for trigger {trigger_name}: {e}")
+                            objects['triggers'].append({'name': trigger_name, 'ddl': ''})
                     
-                    # Get events
+                    # Get events with DDL
                     cursor.execute(f"SHOW EVENTS FROM `{self.config.schema}`")
                     events = cursor.fetchall()
-                    objects['events'] = [{'name': event['Name']} for event in events]
+                    for event in events:
+                        event_name = event['Name']
+                        try:
+                            ddl = self.get_event_ddl(event_name)
+                            objects['events'].append({'name': event_name, 'ddl': ddl})
+                        except Exception as e:
+                            print(f"Warning: Failed to get DDL for event {event_name}: {e}")
+                            objects['events'].append({'name': event_name, 'ddl': ''})
                     
         except Exception as e:
             logger.error(f"Failed to get database objects: {e}")

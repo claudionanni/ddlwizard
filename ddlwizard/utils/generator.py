@@ -68,6 +68,22 @@ class AlterStatementGenerator:
                 # Drop the modified constraint and restore the original
                 rollback_statements.append(f"ALTER TABLE `{table_name}` DROP FOREIGN KEY `{constraint_name}`")
                 rollback_statements.append(f"ALTER TABLE `{table_name}` ADD {original_def}")
+            elif diff_type == 'table_comment_modified':
+                # Rollback table comment change
+                original_comment = diff.get('original_value', '')
+                rollback_statements.append(f"ALTER TABLE `{table_name}` COMMENT='{original_comment}'")
+            elif diff_type == 'table_engine_modified':
+                # Rollback table engine change
+                original_engine = diff.get('original_value', '')
+                rollback_statements.append(f"ALTER TABLE `{table_name}` ENGINE={original_engine}")
+            elif diff_type == 'table_charset_modified':
+                # Rollback table charset change
+                original_charset = diff.get('original_value', '')
+                rollback_statements.append(f"ALTER TABLE `{table_name}` DEFAULT CHARSET={original_charset}")
+            elif diff_type == 'table_collate_modified':
+                # Rollback table collation change
+                original_collate = diff.get('original_value', '')
+                rollback_statements.append(f"ALTER TABLE `{table_name}` COLLATE={original_collate}")
         
         return rollback_statements
     

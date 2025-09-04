@@ -1,7 +1,7 @@
 # DDL Wizard Technical Reference Document
 
-**Version:** 1.2.0  
-**Last Updated:** September 4, 2025  
+**Version:** 1.2.1  
+**Last Updated:** September 4, 2025 (Rollback Architecture Overhaul)  
 **Purpose:** Internal technical reference to maintain consistency and prevent regressions
 
 ---

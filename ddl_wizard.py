@@ -62,7 +62,13 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
         # Handle tables that were dropped in migration (only in dest - need to be recreated)
         for table_name in tables_comparison.get('only_in_dest', []):
             try:
-                dest_ddl = get_dest_ddl('tables', table_name)
+                # Find the table DDL in the original dest_objects
+                dest_ddl = None
+                for table_obj in dest_objects.get('tables', []):
+                    if table_obj['name'] == table_name:
+                        dest_ddl = table_obj['ddl']
+                        break
+                
                 if dest_ddl:
                     rollback_lines.append(f"-- Rollback table drop: {table_name}")
                     rollback_lines.append(dest_ddl + ";")
@@ -90,8 +96,8 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
                 
                 if source_ddl and dest_ddl:
                     # Use the comparator to analyze table differences
-                    # For rollback, we use the original migration differences (source to dest)
-                    # and generate inverse operations to restore the original state
+                    # For rollback, we analyze the same migration differences (source to dest)
+                    # but generate inverse operations to restore the original destination state
                     from schema_comparator import SchemaComparator
                     temp_comparator = SchemaComparator()
                     differences = temp_comparator.analyze_table_differences(table_name, source_ddl, dest_ddl)
@@ -146,7 +152,13 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
         # Handle procedures that are only in destination (dropped in migration)
         for proc_name in procedures_comparison.get('only_in_dest', []):
             try:
-                dest_ddl = get_dest_ddl('procedures', proc_name)
+                # Find the procedure DDL in the original dest_objects
+                dest_ddl = None
+                for proc_obj in dest_objects.get('procedures', []):
+                    if proc_obj['name'] == proc_name:
+                        dest_ddl = proc_obj['ddl']
+                        break
+                
                 if dest_ddl:
                     rollback_lines.append(f"-- Rollback deletion of procedure: {proc_name}")
                     rollback_lines.append("DELIMITER $$")
@@ -197,7 +209,13 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
         # Handle functions that are only in destination (dropped in migration)
         for func_name in functions_comparison.get('only_in_dest', []):
             try:
-                dest_ddl = get_dest_ddl('functions', func_name)
+                # Find the function DDL in the original dest_objects
+                dest_ddl = None
+                for func_obj in dest_objects.get('functions', []):
+                    if func_obj['name'] == func_name:
+                        dest_ddl = func_obj['ddl']
+                        break
+                
                 if dest_ddl:
                     rollback_lines.append(f"-- Rollback deletion of function: {func_name}")
                     rollback_lines.append("DELIMITER $$")
@@ -248,7 +266,13 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
         # Handle triggers that are only in destination (dropped in migration)
         for trigger_name in triggers_comparison.get('only_in_dest', []):
             try:
-                dest_ddl = get_dest_ddl('triggers', trigger_name)
+                # Find the trigger DDL in the original dest_objects
+                dest_ddl = None
+                for trigger_obj in dest_objects.get('triggers', []):
+                    if trigger_obj['name'] == trigger_name:
+                        dest_ddl = trigger_obj['ddl']
+                        break
+                
                 if dest_ddl:
                     rollback_lines.append(f"-- Rollback deletion of trigger: {trigger_name}")
                     rollback_lines.append("DELIMITER $$")
@@ -297,7 +321,13 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
         # Handle events that are only in destination (dropped in migration)
         for event_name in events_comparison.get('only_in_dest', []):
             try:
-                dest_ddl = get_dest_ddl('events', event_name)
+                # Find the event DDL in the original dest_objects
+                dest_ddl = None
+                for event_obj in dest_objects.get('events', []):
+                    if event_obj['name'] == event_name:
+                        dest_ddl = event_obj['ddl']
+                        break
+                
                 if dest_ddl:
                     rollback_lines.append(f"-- Rollback deletion of event: {event_name}")
                     rollback_lines.append(dest_ddl + ";")
@@ -344,7 +374,13 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
         # Handle views that are only in destination (dropped in migration)
         for view_name in views_comparison.get('only_in_dest', []):
             try:
-                dest_ddl = get_dest_ddl('views', view_name)
+                # Find the view DDL in the original dest_objects
+                dest_ddl = None
+                for view_obj in dest_objects.get('views', []):
+                    if view_obj['name'] == view_name:
+                        dest_ddl = view_obj['ddl']
+                        break
+                
                 if dest_ddl:
                     rollback_lines.append(f"-- Rollback deletion of view: {view_name}")
                     rollback_lines.append(dest_ddl + ";")
@@ -391,7 +427,13 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
         # Handle sequences that are only in destination (dropped in migration)
         for sequence_name in sequences_comparison.get('only_in_dest', []):
             try:
-                dest_ddl = get_dest_ddl('sequences', sequence_name)
+                # Find the sequence DDL in the original dest_objects
+                dest_ddl = None
+                for sequence_obj in dest_objects.get('sequences', []):
+                    if sequence_obj['name'] == sequence_name:
+                        dest_ddl = sequence_obj['ddl']
+                        break
+                
                 if dest_ddl:
                     rollback_lines.append(f"-- Rollback deletion of sequence: {sequence_name}")
                     rollback_lines.append(dest_ddl + ";")
