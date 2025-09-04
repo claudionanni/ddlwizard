@@ -6,3 +6,13 @@ Dest db connection:  --dest-host 127.0.0.1 --dest-port 20622 --dest-user sstuser
 
 Compare command:
 python ddl_wizard.py --mode compare --visualize --source-host 127.0.0.1 --source-port 10622 --source-user sstuser --source-password sstpwd --source-schema ddlwizard_source_test --dest-host 127.0.0.1 --dest-port 20622 --dest-user sstuser --dest-password sstpwd --dest-schema ddlwizard_dest_test
+
+Alternative commands:
+# New syntax (recommended)
+python ddl_wizard.py compare --enable-visualization --source-host 127.0.0.1 --source-port 10622 --source-user sstuser --source-password sstpwd --source-schema ddlwizard_source_test --dest-host 127.0.0.1 --dest-port 20622 --dest-user sstuser --dest-password sstpwd --dest-schema ddlwizard_dest_test
+
+# Interactive mode
+python ddl_wizard.py --mode compare --interactive --source-host 127.0.0.1 --source-port 10622 --source-user sstuser --source-password sstpwd --source-schema ddlwizard_source_test --dest-host 127.0.0.1 --dest-port 20622 --dest-user sstuser --dest-password sstpwd --dest-schema ddlwizard_dest_test
+
+# Dry run (generate files only)
+python ddl_wizard.py --mode compare --dry-run --source-host 127.0.0.1 --source-port 10622 --source-user sstuser --source-password sstpwd --source-schema ddlwizard_source_test --dest-host 127.0.0.1 --dest-port 20622 --dest-user sstuser --dest-password sstpwd --dest-schema ddlwizard_dest_test

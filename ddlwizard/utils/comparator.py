@@ -55,7 +55,7 @@ class SchemaComparator:
         dest_col_names = set(dest_columns.keys())
         
         # Columns only in source (need to be added to dest to match source)
-        for col_name in source_col_names - dest_col_names:
+        for col_name in sorted(source_col_names - dest_col_names):
             differences.append({
                 'type': ChangeType.ADD_COLUMN.value,
                 'column_name': col_name,
@@ -64,7 +64,7 @@ class SchemaComparator:
             })
         
         # Columns only in dest (need to be removed from dest to match source)
-        for col_name in dest_col_names - source_col_names:
+        for col_name in sorted(dest_col_names - source_col_names):
             differences.append({
                 'type': ChangeType.REMOVE_COLUMN.value,
                 'column_name': col_name,
@@ -73,7 +73,7 @@ class SchemaComparator:
             })
         
         # Columns in both (check for modifications)
-        for col_name in source_col_names & dest_col_names:
+        for col_name in sorted(source_col_names & dest_col_names):
             source_def = source_columns[col_name].strip()
             dest_def = dest_columns[col_name].strip()
             
@@ -94,7 +94,7 @@ class SchemaComparator:
         dest_idx_names = set(dest_indexes.keys())
         
         # Indexes only in source (need to be added)
-        for idx_name in source_idx_names - dest_idx_names:
+        for idx_name in sorted(source_idx_names - dest_idx_names):
             differences.append({
                 'type': ChangeType.ADD_INDEX.value,
                 'index_name': idx_name,
@@ -103,7 +103,7 @@ class SchemaComparator:
             })
         
         # Indexes only in dest (need to be removed)
-        for idx_name in dest_idx_names - source_idx_names:
+        for idx_name in sorted(dest_idx_names - source_idx_names):
             differences.append({
                 'type': ChangeType.REMOVE_INDEX.value,
                 'index_name': idx_name,
@@ -119,7 +119,7 @@ class SchemaComparator:
         dest_fk_names = set(dest_foreign_keys.keys())
         
         # Foreign keys only in source (need to be added)
-        for fk_name in source_fk_names - dest_fk_names:
+        for fk_name in sorted(source_fk_names - dest_fk_names):
             differences.append({
                 'type': ChangeType.ADD_CONSTRAINT.value,
                 'constraint_name': fk_name,
@@ -128,7 +128,7 @@ class SchemaComparator:
             })
         
         # Foreign keys only in dest (need to be removed)
-        for fk_name in dest_fk_names - source_fk_names:
+        for fk_name in sorted(dest_fk_names - source_fk_names):
             differences.append({
                 'type': ChangeType.REMOVE_CONSTRAINT.value,
                 'constraint_name': fk_name,
@@ -137,7 +137,7 @@ class SchemaComparator:
             })
         
         # Foreign keys in both (check for modifications)
-        for fk_name in source_fk_names & dest_fk_names:
+        for fk_name in sorted(source_fk_names & dest_fk_names):
             source_def = source_foreign_keys[fk_name].strip()
             dest_def = dest_foreign_keys[fk_name].strip()
             
@@ -468,7 +468,7 @@ class SchemaComparator:
             tables_comparison = comparison['tables']
             
             # Tables only in source (to be created)
-            for table_name in tables_comparison.get('only_in_source', []):
+            for table_name in sorted(tables_comparison.get('only_in_source', [])):
                 try:
                     source_ddl = get_source_ddl('tables', table_name)
                     if source_ddl:
@@ -479,13 +479,13 @@ class SchemaComparator:
                     sql_lines.append(f"-- ERROR: Failed to process table {table_name}")
             
             # Tables only in dest (to be dropped)
-            for table_name in tables_comparison.get('only_in_dest', []):
+            for table_name in sorted(tables_comparison.get('only_in_dest', [])):
                 sql_lines.append(f"-- Drop table: {table_name}")
                 sql_lines.append(f"DROP TABLE IF EXISTS `{dest_schema}`.`{table_name}`;")
                 sql_lines.append("")
             
             # Tables with differences (to be modified)
-            for table_name in tables_comparison.get('in_both', []):
+            for table_name in sorted(tables_comparison.get('in_both', [])):
                 try:
                     source_ddl = get_source_ddl('tables', table_name)
                     dest_ddl = get_dest_ddl('tables', table_name)
@@ -518,7 +518,7 @@ class SchemaComparator:
             procedures_comparison = comparison['procedures']
             
             # Procedures only in source (to be created)
-            for proc_name in procedures_comparison.get('only_in_source', []):
+            for proc_name in sorted(procedures_comparison.get('only_in_source', [])):
                 try:
                     source_ddl = get_source_ddl('procedures', proc_name)
                     if source_ddl:
@@ -531,13 +531,13 @@ class SchemaComparator:
                     sql_lines.append(f"-- ERROR: Failed to process procedure {proc_name}")
             
             # Procedures only in dest (to be dropped)
-            for proc_name in procedures_comparison.get('only_in_dest', []):
+            for proc_name in sorted(procedures_comparison.get('only_in_dest', [])):
                 sql_lines.append(f"-- Drop procedure: {proc_name}")
                 sql_lines.append(f"DROP PROCEDURE IF EXISTS `{dest_schema}`.`{proc_name}`;")
                 sql_lines.append("")
             
             # Procedures in both (to be updated)
-            for proc_name in procedures_comparison.get('in_both', []):
+            for proc_name in sorted(procedures_comparison.get('in_both', [])):
                 try:
                     source_ddl = get_source_ddl('procedures', proc_name)
                     dest_ddl = get_dest_ddl('procedures', proc_name)
@@ -569,7 +569,7 @@ class SchemaComparator:
                 ])
                 
                 # Functions only in source (to be created)
-                for func_name in functions_comparison.get('only_in_source', []):
+                for func_name in sorted(functions_comparison.get('only_in_source', [])):
                     try:
                         source_ddl = get_source_ddl('functions', func_name)
                         if source_ddl:
@@ -582,13 +582,13 @@ class SchemaComparator:
                         sql_lines.append(f"-- ERROR: Failed to process function {func_name}")
                 
                 # Functions only in dest (to be dropped)
-                for func_name in functions_comparison.get('only_in_dest', []):
+                for func_name in sorted(functions_comparison.get('only_in_dest', [])):
                     sql_lines.append(f"-- Drop function: {func_name}")
                     sql_lines.append(f"DROP FUNCTION IF EXISTS `{dest_schema}`.`{func_name}`;")
                     sql_lines.append("")
                 
                 # Functions in both (to be updated)
-                for func_name in functions_comparison.get('in_both', []):
+                for func_name in sorted(functions_comparison.get('in_both', [])):
                     try:
                         source_ddl = get_source_ddl('functions', func_name)
                         dest_ddl = get_dest_ddl('functions', func_name)
@@ -620,7 +620,7 @@ class SchemaComparator:
                 ])
                 
                 # Triggers only in source (to be created)
-                for trigger_name in triggers_comparison.get('only_in_source', []):
+                for trigger_name in sorted(triggers_comparison.get('only_in_source', [])):
                     try:
                         source_ddl = get_source_ddl('triggers', trigger_name)
                         if source_ddl:
@@ -633,13 +633,13 @@ class SchemaComparator:
                         sql_lines.append(f"-- ERROR: Failed to process trigger {trigger_name}")
                 
                 # Triggers only in dest (to be dropped)
-                for trigger_name in triggers_comparison.get('only_in_dest', []):
+                for trigger_name in sorted(triggers_comparison.get('only_in_dest', [])):
                     sql_lines.append(f"-- Drop trigger: {trigger_name}")
                     sql_lines.append(f"DROP TRIGGER IF EXISTS `{dest_schema}`.`{trigger_name}`;")
                     sql_lines.append("")
                 
                 # Triggers in both (to be updated)
-                for trigger_name in triggers_comparison.get('in_both', []):
+                for trigger_name in sorted(triggers_comparison.get('in_both', [])):
                     try:
                         source_ddl = get_source_ddl('triggers', trigger_name)
                         dest_ddl = get_dest_ddl('triggers', trigger_name)
@@ -671,7 +671,7 @@ class SchemaComparator:
                 ])
                 
                 # Events only in source (to be created)
-                for event_name in events_comparison.get('only_in_source', []):
+                for event_name in sorted(events_comparison.get('only_in_source', [])):
                     try:
                         source_ddl = get_source_ddl('events', event_name)
                         if source_ddl:
@@ -684,13 +684,13 @@ class SchemaComparator:
                         sql_lines.append(f"-- ERROR: Failed to process event {event_name}")
                 
                 # Events only in dest (to be dropped)
-                for event_name in events_comparison.get('only_in_dest', []):
+                for event_name in sorted(events_comparison.get('only_in_dest', [])):
                     sql_lines.append(f"-- Drop event: {event_name}")
                     sql_lines.append(f"DROP EVENT IF EXISTS `{dest_schema}`.`{event_name}`;")
                     sql_lines.append("")
                 
                 # Events in both (to be updated)
-                for event_name in events_comparison.get('in_both', []):
+                for event_name in sorted(events_comparison.get('in_both', [])):
                     try:
                         source_ddl = get_source_ddl('events', event_name)
                         dest_ddl = get_dest_ddl('events', event_name)
@@ -722,7 +722,7 @@ class SchemaComparator:
                 ])
                 
                 # Views only in source (to be created)
-                for view_name in views_comparison.get('only_in_source', []):
+                for view_name in sorted(views_comparison.get('only_in_source', [])):
                     try:
                         source_ddl = get_source_ddl('views', view_name)
                         if source_ddl:
@@ -735,13 +735,13 @@ class SchemaComparator:
                         sql_lines.append(f"-- ERROR: Failed to process view {view_name}")
                 
                 # Views only in dest (to be dropped)
-                for view_name in views_comparison.get('only_in_dest', []):
+                for view_name in sorted(views_comparison.get('only_in_dest', [])):
                     sql_lines.append(f"-- Drop view: {view_name}")
                     sql_lines.append(f"DROP VIEW IF EXISTS `{dest_schema}`.`{view_name}`;")
                     sql_lines.append("")
                 
                 # Views in both (to be updated)
-                for view_name in views_comparison.get('in_both', []):
+                for view_name in sorted(views_comparison.get('in_both', [])):
                     try:
                         source_ddl = get_source_ddl('views', view_name)
                         dest_ddl = get_dest_ddl('views', view_name)
@@ -773,7 +773,7 @@ class SchemaComparator:
                 ])
                 
                 # Sequences only in source (to be created)
-                for sequence_name in sequences_comparison.get('only_in_source', []):
+                for sequence_name in sorted(sequences_comparison.get('only_in_source', [])):
                     try:
                         source_ddl = get_source_ddl('sequences', sequence_name)
                         if source_ddl:
@@ -786,13 +786,13 @@ class SchemaComparator:
                         sql_lines.append(f"-- ERROR: Failed to process sequence {sequence_name}")
                 
                 # Sequences only in dest (to be dropped)
-                for sequence_name in sequences_comparison.get('only_in_dest', []):
+                for sequence_name in sorted(sequences_comparison.get('only_in_dest', [])):
                     sql_lines.append(f"-- Drop sequence: {sequence_name}")
                     sql_lines.append(f"DROP SEQUENCE IF EXISTS `{dest_schema}`.`{sequence_name}`;")
                     sql_lines.append("")
                 
                 # Sequences in both (to be updated)
-                for sequence_name in sequences_comparison.get('in_both', []):
+                for sequence_name in sorted(sequences_comparison.get('in_both', [])):
                     try:
                         source_ddl = get_source_ddl('sequences', sequence_name)
                         dest_ddl = get_dest_ddl('sequences', sequence_name)
