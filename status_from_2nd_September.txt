@@ -1,0 +1,1 @@
+tested with testdata and migration fails to apply all changes CHECK IT ON Thursday!

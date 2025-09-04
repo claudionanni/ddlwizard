@@ -32,18 +32,18 @@ class DDLWizardTester:
     
     def __init__(self):
         self.source_config = {
-            'host': 'localhost',
-            'port': 3306,
-            'user': 'root',
-            'password': 'password',
+            'host': '127.0.0.1',
+            'port': 10622,
+            'user': 'sstuser',
+            'password': 'sstpwd',
             'database': 'ddl_test_source'
         }
         
         self.dest_config = {
-            'host': 'localhost',
-            'port': 3306,
-            'user': 'root',
-            'password': 'password',
+            'host': '127.0.0.1',
+            'port': 20622,
+            'user': 'sstuser',
+            'password': 'sstpwd',
             'database': 'ddl_test_dest'
         }
         
@@ -226,6 +226,75 @@ class DDLWizardTester:
             END
             """)
             
+            # Create views
+            cursor.execute("DROP VIEW IF EXISTS customer_order_summary")
+            cursor.execute("""
+            CREATE VIEW customer_order_summary AS
+            SELECT 
+                c.id as customer_id,
+                c.first_name,
+                c.last_name,
+                c.email,
+                COUNT(o.id) as total_orders,
+                COALESCE(SUM(o.total_amount), 0) as total_spent,
+                MAX(o.order_date) as last_order_date
+            FROM customers c
+            LEFT JOIN orders o ON c.id = o.customer_id
+            GROUP BY c.id, c.first_name, c.last_name, c.email
+            """)
+            
+            cursor.execute("DROP VIEW IF EXISTS product_sales_summary")
+            cursor.execute("""
+            CREATE VIEW product_sales_summary AS
+            SELECT 
+                p.id as product_id,
+                p.name as product_name,
+                p.sku,
+                COUNT(oi.id) as times_ordered,
+                SUM(oi.quantity) as total_quantity_sold,
+                SUM(oi.total_price) as total_revenue
+            FROM products p
+            LEFT JOIN order_items oi ON p.id = oi.product_id
+            GROUP BY p.id, p.name, p.sku
+            """)
+            
+            # Create sequences (MariaDB 10.3+)
+            cursor.execute("DROP SEQUENCE IF EXISTS order_number_seq")
+            cursor.execute("""
+            CREATE SEQUENCE order_number_seq
+                START WITH 1000
+                INCREMENT BY 1
+                MINVALUE 1000
+                MAXVALUE 999999999
+                CACHE 10
+                NOCYCLE
+            """)
+            
+            cursor.execute("DROP SEQUENCE IF EXISTS customer_id_seq")
+            cursor.execute("""
+            CREATE SEQUENCE customer_id_seq
+                START WITH 100
+                INCREMENT BY 1
+                MINVALUE 100
+                MAXVALUE 999999
+                CACHE 5
+                NOCYCLE
+            """)
+            
+            # Create events
+            cursor.execute("DROP EVENT IF EXISTS cleanup_old_orders")
+            cursor.execute("""
+            CREATE EVENT cleanup_old_orders
+                ON SCHEDULE EVERY 1 DAY
+                STARTS CURRENT_TIMESTAMP
+                ON COMPLETION PRESERVE
+                ENABLE
+                DO
+                  DELETE FROM orders 
+                  WHERE status = 'cancelled' 
+                  AND order_date < DATE_SUB(NOW(), INTERVAL 30 DAY)
+            """)
+            
             # Create triggers
             cursor.execute("DROP TRIGGER IF EXISTS tr_orders_update_timestamp")
             cursor.execute("""
@@ -388,6 +457,88 @@ class DDLWizardTester:
             # CalculateOrderTotal function is not created here
             # Explicitly ensure function doesn't exist
             cursor.execute("DROP FUNCTION IF EXISTS CalculateOrderTotal")
+            
+            # Create different views
+            cursor.execute("DROP VIEW IF EXISTS customer_order_summary")
+            cursor.execute("""
+            CREATE VIEW customer_order_summary AS
+            SELECT 
+                c.id as customer_id,
+                c.first_name,
+                c.last_name,
+                COUNT(o.id) as total_orders
+            FROM customers c
+            LEFT JOIN orders o ON c.id = o.customer_id
+            GROUP BY c.id, c.first_name, c.last_name
+            """)
+            
+            # Create extra view that doesn't exist in source
+            cursor.execute("DROP VIEW IF EXISTS order_status_summary")
+            cursor.execute("""
+            CREATE VIEW order_status_summary AS
+            SELECT 
+                status,
+                COUNT(*) as order_count,
+                SUM(total_amount) as total_value
+            FROM orders
+            GROUP BY status
+            """)
+            
+            # Missing view: product_sales_summary is not created
+            
+            # Create different sequences
+            cursor.execute("DROP SEQUENCE IF EXISTS order_number_seq")
+            cursor.execute("""
+            CREATE SEQUENCE order_number_seq
+                START WITH 2000
+                INCREMENT BY 2
+                MINVALUE 2000
+                MAXVALUE 999999999
+                CACHE 20
+                NOCYCLE
+            """)
+            
+            # Create extra sequence that doesn't exist in source
+            cursor.execute("DROP SEQUENCE IF EXISTS invoice_number_seq")
+            cursor.execute("""
+            CREATE SEQUENCE invoice_number_seq
+                START WITH 5000
+                INCREMENT BY 1
+                MINVALUE 5000
+                MAXVALUE 999999999
+                CACHE 10
+                NOCYCLE
+            """)
+            
+            # Missing sequence: customer_id_seq is not created
+            
+            # Create different events
+            cursor.execute("DROP EVENT IF EXISTS cleanup_old_orders")
+            cursor.execute("""
+            CREATE EVENT cleanup_old_orders
+                ON SCHEDULE EVERY 7 DAY
+                STARTS CURRENT_TIMESTAMP
+                ON COMPLETION PRESERVE
+                ENABLE
+                DO
+                  DELETE FROM orders 
+                  WHERE status = 'cancelled' 
+                  AND order_date < DATE_SUB(NOW(), INTERVAL 60 DAY)
+            """)
+            
+            # Create extra event that doesn't exist in source
+            cursor.execute("DROP EVENT IF EXISTS update_product_popularity")
+            cursor.execute("""
+            CREATE EVENT update_product_popularity
+                ON SCHEDULE EVERY 1 HOUR
+                STARTS CURRENT_TIMESTAMP
+                ON COMPLETION PRESERVE
+                ENABLE
+                DO
+                  UPDATE products p 
+                  SET p.stock_quantity = p.stock_quantity + 1
+                  WHERE p.is_active = TRUE
+            """)
             
             # Create different trigger
             cursor.execute("DROP TRIGGER IF EXISTS tr_customers_loyalty_update")
@@ -672,7 +823,16 @@ class DDLWizardTester:
             'detected_missing_functions': False,
             'detected_different_procedures': False,
             'detected_missing_triggers': False,
-            'detected_extra_tables': False
+            'detected_extra_tables': False,
+            'detected_missing_views': False,
+            'detected_extra_views': False,
+            'detected_different_views': False,
+            'detected_missing_sequences': False,
+            'detected_extra_sequences': False,
+            'detected_different_sequences': False,
+            'detected_missing_events': False,
+            'detected_extra_events': False,
+            'detected_different_events': False
         }
         
         try:
@@ -698,6 +858,21 @@ class DDLWizardTester:
                 test_results['detected_extra_indexes'] = 'DROP INDEX' in migration_content or 'DROP KEY' in migration_content
                 test_results['detected_missing_fk'] = 'ADD CONSTRAINT' in migration_content and 'FOREIGN KEY' in migration_content
                 
+                # Check for view operations
+                test_results['detected_missing_views'] = 'CREATE VIEW' in migration_content
+                test_results['detected_extra_views'] = 'DROP VIEW' in migration_content
+                test_results['detected_different_views'] = 'UPDATE VIEW' in migration_content or ('DROP VIEW' in migration_content and 'CREATE VIEW' in migration_content)
+                
+                # Check for sequence operations
+                test_results['detected_missing_sequences'] = 'CREATE SEQUENCE' in migration_content
+                test_results['detected_extra_sequences'] = 'DROP SEQUENCE' in migration_content
+                test_results['detected_different_sequences'] = 'UPDATE SEQUENCE' in migration_content or ('DROP SEQUENCE' in migration_content and 'CREATE SEQUENCE' in migration_content)
+                
+                # Check for event operations
+                test_results['detected_missing_events'] = 'CREATE EVENT' in migration_content
+                test_results['detected_extra_events'] = 'DROP EVENT' in migration_content
+                test_results['detected_different_events'] = 'UPDATE EVENT' in migration_content or ('DROP EVENT' in migration_content and 'CREATE EVENT' in migration_content)
+                
             # Analyze comparison report
             if comparison_file.exists():
                 report_content = comparison_file.read_text()
@@ -706,6 +881,14 @@ class DDLWizardTester:
                 test_results['detected_different_procedures'] = 'procedures' in report_content.lower() and 'differences' in report_content.lower()
                 test_results['detected_missing_triggers'] = 'triggers' in report_content.lower()
                 test_results['detected_extra_tables'] = 'temp_table' in report_content.lower()
+                
+                # Check for view, sequence, and event differences in report
+                test_results['detected_missing_views'] = test_results['detected_missing_views'] or ('views' in report_content.lower() and 'only in source' in report_content.lower())
+                test_results['detected_extra_views'] = test_results['detected_extra_views'] or ('views' in report_content.lower() and 'only in dest' in report_content.lower())
+                test_results['detected_missing_sequences'] = test_results['detected_missing_sequences'] or ('sequences' in report_content.lower() and 'only in source' in report_content.lower())
+                test_results['detected_extra_sequences'] = test_results['detected_extra_sequences'] or ('sequences' in report_content.lower() and 'only in dest' in report_content.lower())
+                test_results['detected_missing_events'] = test_results['detected_missing_events'] or ('events' in report_content.lower() and 'only in source' in report_content.lower())
+                test_results['detected_extra_events'] = test_results['detected_extra_events'] or ('events' in report_content.lower() and 'only in dest' in report_content.lower())
             
             return test_results
             
@@ -801,7 +984,11 @@ class DDLWizardTester:
             'detected_missing_indexes', 'detected_extra_indexes',
             'detected_missing_fk', 'detected_missing_functions',
             'detected_different_procedures', 'detected_missing_triggers',
-            'detected_extra_tables'
+            'detected_extra_tables', 'detected_missing_views',
+            'detected_extra_views', 'detected_different_views',
+            'detected_missing_sequences', 'detected_extra_sequences',
+            'detected_different_sequences', 'detected_missing_events',
+            'detected_extra_events', 'detected_different_events'
         ]
         for test in detection_tests:
             if test in results:
@@ -1067,10 +1254,10 @@ def main():
     parser = argparse.ArgumentParser(description="DDL Wizard Test Suite")
     
     # Source database connection
-    parser.add_argument('--host', default='localhost', help='Source database host')
-    parser.add_argument('--port', type=int, default=3306, help='Source database port')
-    parser.add_argument('--user', default='root', help='Source database user')
-    parser.add_argument('--password', default='password', help='Source database password')
+    parser.add_argument('--host', default='127.0.0.1', help='Source database host')
+    parser.add_argument('--port', type=int, default=10622, help='Source database port')
+    parser.add_argument('--user', default='sstuser', help='Source database user')
+    parser.add_argument('--password', default='sstpwd', help='Source database password')
     
     # Destination database connection (optional, defaults to source if not specified)
     parser.add_argument('--dest-host', help='Destination database host (defaults to source host)')

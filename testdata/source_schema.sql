@@ -3,8 +3,17 @@
 -- Run this script on your source database instance
 
 -- Create the source database
+DROP DATABASE IF EXISTS ddlwizard_source_test;
 CREATE DATABASE IF NOT EXISTS ddlwizard_source_test;
 USE ddlwizard_source_test;
+
+-- Create sequence for user IDs (MariaDB 10.3+)
+CREATE SEQUENCE user_id_seq
+    START WITH 1000
+    INCREMENT BY 1
+    MINVALUE 1000
+    MAXVALUE 999999999
+    CACHE 10;
 
 -- Users table
 CREATE TABLE users (

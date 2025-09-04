@@ -1,0 +1,41 @@
+erDiagram
+    categories {
+        int(11) id "NOT NULL, AUTO_INCREMENT"
+        varchar(50) name "NOT NULL"
+        int(11) parent_id
+    }
+    order_items {
+        int(11) id "NOT NULL, AUTO_INCREMENT"
+        int(11) order_id "NOT NULL"
+        int(11) product_id "NOT NULL"
+        int(11) quantity "NOT NULL"
+        decimal(10,2) unit_price "NOT NULL"
+        decimal(12,2) total_price
+    }
+    orders {
+        int(11) id "NOT NULL, AUTO_INCREMENT"
+        int(11) user_id "NOT NULL"
+        decimal(12,2) total_amount "NOT NULL"
+    }
+    products {
+        int(11) id "NOT NULL, AUTO_INCREMENT"
+        varchar(100) name "NOT NULL"
+        decimal(10,2) price "NOT NULL"
+        int(11) category_id
+        int(11) stock_quantity
+        varchar(50) sku
+    }
+    users {
+        int(11) id "NOT NULL, AUTO_INCREMENT"
+        varchar(50) username "NOT NULL"
+        varchar(100) email "NOT NULL"
+        varchar(255) password_hash "NOT NULL"
+        varchar(50) first_name
+        varchar(50) last_name
+        tinyint(1) is_active
+    }
+    categories ||--o{ categories : 
+    order_items ||--o{ orders : 
+    order_items ||--o{ products : 
+    orders ||--o{ users : 
+    products ||--o{ categories : 

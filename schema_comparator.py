@@ -358,7 +358,7 @@ class SchemaComparator:
         comparison = {}
         
         # Compare each object type
-        for obj_type in ['tables', 'procedures', 'functions', 'triggers', 'events']:
+        for obj_type in ['tables', 'views', 'procedures', 'functions', 'triggers', 'events', 'sequences']:
             source_names = {obj['name'] for obj in source_objects.get(obj_type, [])}
             dest_names = {obj['name'] for obj in dest_objects.get(obj_type, [])}
             
@@ -654,28 +654,158 @@ class SchemaComparator:
                     except Exception:
                         sql_lines.append(f"-- ERROR: Failed to process trigger {trigger_name}")
         
-        # Add sections for unchanged objects to show what DDL Wizard can compare
-        object_types = ['events']
+        # Process event changes
+        if 'events' in comparison:
+            events_comparison = comparison['events']
+            if (events_comparison.get('only_in_source') or 
+                events_comparison.get('only_in_dest') or 
+                events_comparison.get('in_both')):
+                
+                sql_lines.extend([
+                    "",
+                    "-- EVENTS CHANGES", 
+                    "--" + "-" * 48
+                ])
+                
+                # Events only in source (to be created)
+                for event_name in events_comparison.get('only_in_source', []):
+                    try:
+                        source_ddl = get_source_ddl('events', event_name)
+                        if source_ddl:
+                            sql_lines.append(f"-- Create event: {event_name}")
+                            sql_lines.append(f"DROP EVENT IF EXISTS `{dest_schema}`.`{event_name}`;")
+                            adapted_ddl = self._adapt_ddl_for_destination(source_ddl, dest_schema)
+                            sql_lines.append(adapted_ddl)
+                            sql_lines.append("")
+                    except Exception:
+                        sql_lines.append(f"-- ERROR: Failed to process event {event_name}")
+                
+                # Events only in dest (to be dropped)
+                for event_name in events_comparison.get('only_in_dest', []):
+                    sql_lines.append(f"-- Drop event: {event_name}")
+                    sql_lines.append(f"DROP EVENT IF EXISTS `{dest_schema}`.`{event_name}`;")
+                    sql_lines.append("")
+                
+                # Events in both (to be updated)
+                for event_name in events_comparison.get('in_both', []):
+                    try:
+                        source_ddl = get_source_ddl('events', event_name)
+                        dest_ddl = get_dest_ddl('events', event_name)
+                        
+                        # Normalize whitespace for comparison
+                        source_normalized = ' '.join(source_ddl.split()) if source_ddl else ''
+                        dest_normalized = ' '.join(dest_ddl.split()) if dest_ddl else ''
+                        
+                        if source_normalized != dest_normalized:
+                            sql_lines.append(f"-- Update event: {event_name}")
+                            sql_lines.append(f"DROP EVENT IF EXISTS `{dest_schema}`.`{event_name}`;")
+                            adapted_ddl = self._adapt_ddl_for_destination(source_ddl, dest_schema)
+                            sql_lines.append(adapted_ddl)
+                            sql_lines.append("")
+                    except Exception:
+                        sql_lines.append(f"-- ERROR: Failed to process event {event_name}")
         
-        for obj_type in object_types:
-            obj_type_upper = obj_type.upper()
-            sql_lines.extend([
-                "",
-                f"-- {obj_type_upper} CHANGES",
-                "--" + "-" * 48
-            ])
-            
-            if obj_type in comparison and (
-                comparison[obj_type].get('only_in_source') or 
-                comparison[obj_type].get('only_in_dest') or 
-                comparison[obj_type].get('in_both')
-            ):
-                # This object type has changes - would be handled above
-                # For now, just show placeholder since we don't fully implement all types yet
-                sql_lines.append("-- (Changes for this object type not yet implemented)")
-            else:
-                sql_lines.append("-- <none>")
-            sql_lines.append("")
+        # Process view changes
+        if 'views' in comparison:
+            views_comparison = comparison['views']
+            if (views_comparison.get('only_in_source') or 
+                views_comparison.get('only_in_dest') or 
+                views_comparison.get('in_both')):
+                
+                sql_lines.extend([
+                    "",
+                    "-- VIEWS CHANGES", 
+                    "--" + "-" * 48
+                ])
+                
+                # Views only in source (to be created)
+                for view_name in views_comparison.get('only_in_source', []):
+                    try:
+                        source_ddl = get_source_ddl('views', view_name)
+                        if source_ddl:
+                            sql_lines.append(f"-- Create view: {view_name}")
+                            sql_lines.append(f"DROP VIEW IF EXISTS `{dest_schema}`.`{view_name}`;")
+                            adapted_ddl = self._adapt_ddl_for_destination(source_ddl, dest_schema)
+                            sql_lines.append(adapted_ddl)
+                            sql_lines.append("")
+                    except Exception:
+                        sql_lines.append(f"-- ERROR: Failed to process view {view_name}")
+                
+                # Views only in dest (to be dropped)
+                for view_name in views_comparison.get('only_in_dest', []):
+                    sql_lines.append(f"-- Drop view: {view_name}")
+                    sql_lines.append(f"DROP VIEW IF EXISTS `{dest_schema}`.`{view_name}`;")
+                    sql_lines.append("")
+                
+                # Views in both (to be updated)
+                for view_name in views_comparison.get('in_both', []):
+                    try:
+                        source_ddl = get_source_ddl('views', view_name)
+                        dest_ddl = get_dest_ddl('views', view_name)
+                        
+                        # Normalize whitespace for comparison
+                        source_normalized = ' '.join(source_ddl.split()) if source_ddl else ''
+                        dest_normalized = ' '.join(dest_ddl.split()) if dest_ddl else ''
+                        
+                        if source_normalized != dest_normalized:
+                            sql_lines.append(f"-- Update view: {view_name}")
+                            sql_lines.append(f"DROP VIEW IF EXISTS `{dest_schema}`.`{view_name}`;")
+                            adapted_ddl = self._adapt_ddl_for_destination(source_ddl, dest_schema)
+                            sql_lines.append(adapted_ddl)
+                            sql_lines.append("")
+                    except Exception:
+                        sql_lines.append(f"-- ERROR: Failed to process view {view_name}")
+        
+        # Process sequence changes
+        if 'sequences' in comparison:
+            sequences_comparison = comparison['sequences']
+            if (sequences_comparison.get('only_in_source') or 
+                sequences_comparison.get('only_in_dest') or 
+                sequences_comparison.get('in_both')):
+                
+                sql_lines.extend([
+                    "",
+                    "-- SEQUENCES CHANGES", 
+                    "--" + "-" * 48
+                ])
+                
+                # Sequences only in source (to be created)
+                for sequence_name in sequences_comparison.get('only_in_source', []):
+                    try:
+                        source_ddl = get_source_ddl('sequences', sequence_name)
+                        if source_ddl:
+                            sql_lines.append(f"-- Create sequence: {sequence_name}")
+                            sql_lines.append(f"DROP SEQUENCE IF EXISTS `{dest_schema}`.`{sequence_name}`;")
+                            adapted_ddl = self._adapt_ddl_for_destination(source_ddl, dest_schema)
+                            sql_lines.append(adapted_ddl)
+                            sql_lines.append("")
+                    except Exception:
+                        sql_lines.append(f"-- ERROR: Failed to process sequence {sequence_name}")
+                
+                # Sequences only in dest (to be dropped)
+                for sequence_name in sequences_comparison.get('only_in_dest', []):
+                    sql_lines.append(f"-- Drop sequence: {sequence_name}")
+                    sql_lines.append(f"DROP SEQUENCE IF EXISTS `{dest_schema}`.`{sequence_name}`;")
+                    sql_lines.append("")
+                
+                # Sequences in both (to be updated)
+                for sequence_name in sequences_comparison.get('in_both', []):
+                    try:
+                        source_ddl = get_source_ddl('sequences', sequence_name)
+                        dest_ddl = get_dest_ddl('sequences', sequence_name)
+                        
+                        # Normalize whitespace for comparison
+                        source_normalized = ' '.join(source_ddl.split()) if source_ddl else ''
+                        dest_normalized = ' '.join(dest_ddl.split()) if dest_ddl else ''
+                        
+                        if source_normalized != dest_normalized:
+                            sql_lines.append(f"-- Update sequence: {sequence_name}")
+                            sql_lines.append(f"DROP SEQUENCE IF EXISTS `{dest_schema}`.`{sequence_name}`;")
+                            adapted_ddl = self._adapt_ddl_for_destination(source_ddl, dest_schema)
+                            sql_lines.append(adapted_ddl)
+                            sql_lines.append("")
+                    except Exception:
+                        sql_lines.append(f"-- ERROR: Failed to process sequence {sequence_name}")
         
         sql_lines.extend([
             "",

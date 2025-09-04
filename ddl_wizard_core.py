@@ -126,6 +126,8 @@ class DDLWizardCore:
         """Get DDL for a source database object."""
         if object_type == 'tables':
             return self.source_db.get_table_ddl(object_name)
+        elif object_type == 'views':
+            return self.source_db.get_view_ddl(object_name)
         elif object_type == 'functions':
             return self.source_db.get_function_ddl(object_name)
         elif object_type == 'procedures':
@@ -134,6 +136,8 @@ class DDLWizardCore:
             return self.source_db.get_trigger_ddl(object_name)
         elif object_type == 'events':
             return self.source_db.get_event_ddl(object_name)
+        elif object_type == 'sequences':
+            return self.source_db.get_sequence_ddl(object_name)
         return ""
     
     def compare_schemas(self, source_objects: Dict, dest_objects: Dict) -> Dict:

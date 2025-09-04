@@ -258,6 +258,147 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
             except Exception as e:
                 rollback_lines.append(f"-- ERROR: Failed to restore trigger {trigger_name}: {str(e)}")
                 continue
+
+    # Process events that exist in both and may have differences  
+    if 'events' in comparison:
+        events_comparison = comparison['events']
+        
+        for event_name in events_comparison.get('in_both', []):
+            try:
+                # Get DDL for both versions
+                source_ddl = get_source_ddl('events', event_name)
+                dest_ddl = get_dest_ddl('events', event_name)
+                
+                # Only generate rollback if there are actual differences
+                source_normalized = ' '.join(source_ddl.split()) if source_ddl else ''
+                dest_normalized = ' '.join(dest_ddl.split()) if dest_ddl else ''
+                
+                if source_normalized != dest_normalized and dest_ddl:
+                    rollback_lines.append(f"-- Rollback event: {event_name}")
+                    rollback_lines.append(f"DROP EVENT IF EXISTS `{event_name}`;")
+                    rollback_lines.append(dest_ddl + ";")
+                    rollback_lines.append("")
+                    
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to process event {event_name}: {str(e)}")
+                continue
+        
+        # Handle events that are only in source (created in migration)
+        for event_name in events_comparison.get('only_in_source', []):
+            try:
+                # Drop the created event
+                rollback_lines.append(f"-- Rollback creation of event: {event_name}")
+                rollback_lines.append(f"DROP EVENT IF EXISTS `{event_name}`;")
+                rollback_lines.append("")
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to process event {event_name}: {str(e)}")
+                continue
+        
+        # Handle events that are only in destination (dropped in migration)
+        for event_name in events_comparison.get('only_in_dest', []):
+            try:
+                dest_ddl = get_dest_ddl('events', event_name)
+                if dest_ddl:
+                    rollback_lines.append(f"-- Rollback deletion of event: {event_name}")
+                    rollback_lines.append(dest_ddl + ";")
+                    rollback_lines.append("")
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to restore event {event_name}: {str(e)}")
+                continue
+
+    # Process views that exist in both and may have differences  
+    if 'views' in comparison:
+        views_comparison = comparison['views']
+        
+        for view_name in views_comparison.get('in_both', []):
+            try:
+                # Get DDL for both versions
+                source_ddl = get_source_ddl('views', view_name)
+                dest_ddl = get_dest_ddl('views', view_name)
+                
+                # Only generate rollback if there are actual differences
+                source_normalized = ' '.join(source_ddl.split()) if source_ddl else ''
+                dest_normalized = ' '.join(dest_ddl.split()) if dest_ddl else ''
+                
+                if source_normalized != dest_normalized and dest_ddl:
+                    rollback_lines.append(f"-- Rollback view: {view_name}")
+                    rollback_lines.append(f"DROP VIEW IF EXISTS `{view_name}`;")
+                    rollback_lines.append(dest_ddl + ";")
+                    rollback_lines.append("")
+                    
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to process view {view_name}: {str(e)}")
+                continue
+        
+        # Handle views that are only in source (created in migration)
+        for view_name in views_comparison.get('only_in_source', []):
+            try:
+                # Drop the created view
+                rollback_lines.append(f"-- Rollback creation of view: {view_name}")
+                rollback_lines.append(f"DROP VIEW IF EXISTS `{view_name}`;")
+                rollback_lines.append("")
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to process view {view_name}: {str(e)}")
+                continue
+        
+        # Handle views that are only in destination (dropped in migration)
+        for view_name in views_comparison.get('only_in_dest', []):
+            try:
+                dest_ddl = get_dest_ddl('views', view_name)
+                if dest_ddl:
+                    rollback_lines.append(f"-- Rollback deletion of view: {view_name}")
+                    rollback_lines.append(dest_ddl + ";")
+                    rollback_lines.append("")
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to restore view {view_name}: {str(e)}")
+                continue
+
+    # Process sequences that exist in both and may have differences  
+    if 'sequences' in comparison:
+        sequences_comparison = comparison['sequences']
+        
+        for sequence_name in sequences_comparison.get('in_both', []):
+            try:
+                # Get DDL for both versions
+                source_ddl = get_source_ddl('sequences', sequence_name)
+                dest_ddl = get_dest_ddl('sequences', sequence_name)
+                
+                # Only generate rollback if there are actual differences
+                source_normalized = ' '.join(source_ddl.split()) if source_ddl else ''
+                dest_normalized = ' '.join(dest_ddl.split()) if dest_ddl else ''
+                
+                if source_normalized != dest_normalized and dest_ddl:
+                    rollback_lines.append(f"-- Rollback sequence: {sequence_name}")
+                    rollback_lines.append(f"DROP SEQUENCE IF EXISTS `{sequence_name}`;")
+                    rollback_lines.append(dest_ddl + ";")
+                    rollback_lines.append("")
+                    
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to process sequence {sequence_name}: {str(e)}")
+                continue
+        
+        # Handle sequences that are only in source (created in migration)
+        for sequence_name in sequences_comparison.get('only_in_source', []):
+            try:
+                # Drop the created sequence
+                rollback_lines.append(f"-- Rollback creation of sequence: {sequence_name}")
+                rollback_lines.append(f"DROP SEQUENCE IF EXISTS `{sequence_name}`;")
+                rollback_lines.append("")
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to process sequence {sequence_name}: {str(e)}")
+                continue
+        
+        # Handle sequences that are only in destination (dropped in migration)
+        for sequence_name in sequences_comparison.get('only_in_dest', []):
+            try:
+                dest_ddl = get_dest_ddl('sequences', sequence_name)
+                if dest_ddl:
+                    rollback_lines.append(f"-- Rollback deletion of sequence: {sequence_name}")
+                    rollback_lines.append(dest_ddl + ";")
+                    rollback_lines.append("")
+            except Exception as e:
+                rollback_lines.append(f"-- ERROR: Failed to restore sequence {sequence_name}: {str(e)}")
+                continue
     
     # Add closing statements
     rollback_lines.extend([

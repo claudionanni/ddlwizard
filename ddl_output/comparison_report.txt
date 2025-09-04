@@ -1,0 +1,31 @@
+DDL Wizard Schema Comparison Report
+========================================
+Source Schema: ddlwizard_source_test
+Destination Schema: ddlwizard_dest_test
+Generated: unknown
+
+Total Operations: 11
+Safety Warnings: 0
+
+Changes Summary:
+  TABLE:
+    - DROP: stock_alerts
+    - DROP: product_reviews
+    - MODIFY: categories
+    - MODIFY: products
+    - MODIFY: order_items
+    - MODIFY: orders
+    - MODIFY: users
+  PROCEDURE:
+    - DROP: GetProductReviewSummary
+    - UPDATE: GetUserOrderHistory
+  FUNCTION:
+    - DROP: GetProductAverageRating
+    - UPDATE: GetUserTotalSpent
+
+Detailed Differences:
+  Procedures with differences:
+    - GetUserOrderHistory
+  Triggers:
+    - Extra in destination: generate_order_number
+    - Different: update_stock_after_order

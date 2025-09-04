@@ -126,6 +126,8 @@ class DDLWizardCore:
         """Get DDL for a source database object."""
         if object_type == 'tables':
             return self.source_db.get_table_ddl(object_name)
+        elif object_type == 'views':
+            return self.source_db.get_view_ddl(object_name)
         elif object_type == 'functions':
             return self.source_db.get_function_ddl(object_name)
         elif object_type == 'procedures':
@@ -134,6 +136,8 @@ class DDLWizardCore:
             return self.source_db.get_trigger_ddl(object_name)
         elif object_type == 'events':
             return self.source_db.get_event_ddl(object_name)
+        elif object_type == 'sequences':
+            return self.source_db.get_sequence_ddl(object_name)
         return ""
     
     def compare_schemas(self, source_objects: Dict, dest_objects: Dict) -> Dict:
@@ -189,6 +193,8 @@ class DDLWizardCore:
         def get_source_ddl(object_type: str, object_name: str) -> str:
             if object_type == 'tables':
                 return self.source_db.get_table_ddl(object_name)
+            elif object_type == 'views':
+                return self.source_db.get_view_ddl(object_name)
             elif object_type == 'functions':
                 return self.source_db.get_function_ddl(object_name)
             elif object_type == 'procedures':
@@ -197,11 +203,15 @@ class DDLWizardCore:
                 return self.source_db.get_trigger_ddl(object_name)
             elif object_type == 'events':
                 return self.source_db.get_event_ddl(object_name)
+            elif object_type == 'sequences':
+                return self.source_db.get_sequence_ddl(object_name)
             return ""
         
         def get_dest_ddl(object_type: str, object_name: str) -> str:
             if object_type == 'tables':
                 return self.dest_db.get_table_ddl(object_name)
+            elif object_type == 'views':
+                return self.dest_db.get_view_ddl(object_name)
             elif object_type == 'functions':
                 return self.dest_db.get_function_ddl(object_name)
             elif object_type == 'procedures':
@@ -210,6 +220,8 @@ class DDLWizardCore:
                 return self.dest_db.get_trigger_ddl(object_name)
             elif object_type == 'events':
                 return self.dest_db.get_event_ddl(object_name)
+            elif object_type == 'sequences':
+                return self.dest_db.get_sequence_ddl(object_name)
             return ""
         
         logger.info("Generating migration SQL...")
@@ -233,6 +245,8 @@ class DDLWizardCore:
         def get_source_ddl(object_type: str, object_name: str) -> str:
             if object_type == 'tables':
                 return self.source_db.get_table_ddl(object_name)
+            elif object_type == 'views':
+                return self.source_db.get_view_ddl(object_name)
             elif object_type == 'functions':
                 return self.source_db.get_function_ddl(object_name)
             elif object_type == 'procedures':
@@ -241,11 +255,15 @@ class DDLWizardCore:
                 return self.source_db.get_trigger_ddl(object_name)
             elif object_type == 'events':
                 return self.source_db.get_event_ddl(object_name)
+            elif object_type == 'sequences':
+                return self.source_db.get_sequence_ddl(object_name)
             return ""
         
         def get_dest_ddl(object_type: str, object_name: str) -> str:
             if object_type == 'tables':
                 return self.dest_db.get_table_ddl(object_name)
+            elif object_type == 'views':
+                return self.dest_db.get_view_ddl(object_name)
             elif object_type == 'functions':
                 return self.dest_db.get_function_ddl(object_name)
             elif object_type == 'procedures':
@@ -254,6 +272,8 @@ class DDLWizardCore:
                 return self.dest_db.get_trigger_ddl(object_name)
             elif object_type == 'events':
                 return self.dest_db.get_event_ddl(object_name)
+            elif object_type == 'sequences':
+                return self.dest_db.get_sequence_ddl(object_name)
             return ""
         
         # Import the rollback generation function from main module
@@ -288,6 +308,8 @@ class DDLWizardCore:
         def get_source_ddl(object_type: str, object_name: str) -> str:
             if object_type == 'tables':
                 return self.source_db.get_table_ddl(object_name)
+            elif object_type == 'views':
+                return self.source_db.get_view_ddl(object_name)
             elif object_type == 'functions':
                 return self.source_db.get_function_ddl(object_name)
             elif object_type == 'procedures':
@@ -296,11 +318,15 @@ class DDLWizardCore:
                 return self.source_db.get_trigger_ddl(object_name)
             elif object_type == 'events':
                 return self.source_db.get_event_ddl(object_name)
+            elif object_type == 'sequences':
+                return self.source_db.get_sequence_ddl(object_name)
             return ""
         
         def get_dest_ddl(object_type: str, object_name: str) -> str:
             if object_type == 'tables':
                 return self.dest_db.get_table_ddl(object_name)
+            elif object_type == 'views':
+                return self.dest_db.get_view_ddl(object_name)
             elif object_type == 'functions':
                 return self.dest_db.get_function_ddl(object_name)
             elif object_type == 'procedures':
@@ -309,6 +335,8 @@ class DDLWizardCore:
                 return self.dest_db.get_trigger_ddl(object_name)
             elif object_type == 'events':
                 return self.dest_db.get_event_ddl(object_name)
+            elif object_type == 'sequences':
+                return self.dest_db.get_sequence_ddl(object_name)
             return ""
         
         # Generate migration report data from comparison results

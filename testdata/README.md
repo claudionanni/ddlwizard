@@ -4,8 +4,8 @@ This directory contains sample SQL scripts to help you test DDL Wizard out of th
 
 ## 📋 What's Included
 
-### 🗃️ Source Schema (`source_schema.sql`)
-A basic e-commerce database schema including:
+### 🗃️ Basic Schema (`source_schema.sql`)
+A simple e-commerce database schema including:
 - **Tables**: users, products, categories, orders, order_items
 - **Stored Procedures**: GetUserOrderHistory
 - **Functions**: GetUserTotalSpent
@@ -14,7 +14,7 @@ A basic e-commerce database schema including:
 - **Views**: order_summary
 - **Sample data** for all tables
 
-### 🗃️ Destination Schema (`destination_schema.sql`)
+### 🗃️ Enhanced Schema (`destination_schema.sql`)
 An enhanced version of the e-commerce schema with:
 - **Modified Tables**: Additional columns, changed constraints, new indexes
 - **New Tables**: product_reviews, stock_alerts
@@ -24,6 +24,28 @@ An enhanced version of the e-commerce schema with:
 - **Modified Events**: Different schedules and new events
 - **Enhanced Views**: Additional columns and new views
 - **Extended sample data**
+
+## ⚠️ **Important: DDL Wizard Direction**
+
+**DDL Wizard makes the DESTINATION look like the SOURCE:**
+- **SOURCE** = Target state (where you want to go)
+- **DESTINATION** = Current state (what you want to change)
+
+### For Testing Schema Evolution (Basic → Enhanced):
+```bash
+# Use enhanced schema as SOURCE, basic schema as DESTINATION
+python main.py compare \
+  --source-host localhost --source-schema ddlwizard_dest_test \    # Enhanced (target)
+  --dest-host localhost --dest-schema ddlwizard_source_test \      # Basic (current)
+```
+
+### For Testing Schema Rollback (Enhanced → Basic):
+```bash
+# Use basic schema as SOURCE, enhanced schema as DESTINATION  
+python main.py compare \
+  --source-host localhost --source-schema ddlwizard_source_test \  # Basic (target)
+  --dest-host localhost --dest-schema ddlwizard_dest_test \        # Enhanced (current)
+```
 
 ## 🚀 Quick Start
 
@@ -55,16 +77,24 @@ docker exec -i ddlwizard-dest mysql -u root -ptestpass < testdata/destination_sc
 ### 2. Test DDL Wizard CLI
 
 ```bash
-# Compare the two schemas
+# Test Schema Evolution (Basic → Enhanced)
+# Make basic schema look like enhanced schema
+python main.py compare \
+  --source-host localhost --source-port 3306 --source-user root --source-password testpass --source-schema ddlwizard_dest_test \
+  --dest-host localhost --dest-port 3307 --dest-user root --dest-password testpass --dest-schema ddlwizard_source_test \
+  --output-dir ./test_migration
+
+# Test Schema Rollback (Enhanced → Basic)  
+# Make enhanced schema look like basic schema
 python main.py compare \
   --source-host localhost --source-port 3306 --source-user root --source-password testpass --source-schema ddlwizard_source_test \
   --dest-host localhost --dest-port 3307 --dest-user root --dest-password testpass --dest-schema ddlwizard_dest_test \
-  --output-dir ./test_migration
+  --output-dir ./test_rollback
 
 # Or using single database with different schema names
 python main.py compare \
-  --source-host localhost --source-user root --source-password yourpass --source-schema ddlwizard_source_test \
-  --dest-host localhost --dest-user root --dest-password yourpass --dest-schema ddlwizard_dest_test \
+  --source-host localhost --source-user root --source-password yourpass --source-schema ddlwizard_dest_test \
+  --dest-host localhost --dest-user root --dest-password yourpass --dest-schema ddlwizard_source_test \
   --output-dir ./test_migration
 ```
 
@@ -77,19 +107,21 @@ streamlit run ddlwizard/gui.py --server.port 8501
 
 Then configure the databases in the web interface:
 
-**Source Database:**
+**For Schema Evolution Test (Basic → Enhanced):**
+
+*Source Database (Target State):*
 - Host: localhost
 - Port: 3306 (or 3306 for single DB)
 - Username: root  
 - Password: testpass (or your password)
-- Schema: ddlwizard_source_test
+- Schema: ddlwizard_dest_test
 
-**Destination Database:**
+*Destination Database (Current State):*
 - Host: localhost
 - Port: 3307 (or 3306 for single DB)
 - Username: root
 - Password: testpass (or your password)  
-- Schema: ddlwizard_dest_test
+- Schema: ddlwizard_source_test
 
 ## 📊 Expected Results
 

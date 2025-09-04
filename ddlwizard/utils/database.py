@@ -61,19 +61,35 @@ class DatabaseManager:
         """Get all database objects with their DDL."""
         objects = {
             'tables': [],
+            'views': [],
             'procedures': [],
             'functions': [],
             'triggers': [],
-            'events': []
+            'events': [],
+            'sequences': []
         }
         
         try:
             with self._get_connection() as conn:
                 with conn.cursor() as cursor:
-                    # Get tables
-                    cursor.execute(f"SHOW TABLES FROM `{self.config.schema}`")
+                    # Get tables (excluding views)
+                    cursor.execute(f"SHOW FULL TABLES FROM `{self.config.schema}` WHERE Table_type = 'BASE TABLE'")
                     tables = cursor.fetchall()
                     objects['tables'] = [{'name': list(table.values())[0]} for table in tables]
+                    
+                    # Get views
+                    cursor.execute(f"SHOW FULL TABLES FROM `{self.config.schema}` WHERE Table_type = 'VIEW'")
+                    views = cursor.fetchall()
+                    objects['views'] = [{'name': list(view.values())[0]} for view in views]
+                    
+                    # Get sequences (MariaDB 10.3+)
+                    try:
+                        cursor.execute(f"SHOW FULL TABLES FROM `{self.config.schema}` WHERE Table_type = 'SEQUENCE'")
+                        sequences = cursor.fetchall()
+                        objects['sequences'] = [{'name': list(seq.values())[0]} for seq in sequences]
+                    except Exception:
+                        # Sequences not supported in this MariaDB version
+                        objects['sequences'] = []
                     
                     # Get procedures
                     cursor.execute(f"SHOW PROCEDURE STATUS WHERE Db = '{self.config.schema}'")
@@ -163,4 +179,30 @@ class DatabaseManager:
                         return list(result.values())[3]  # Fourth column contains the DDL
         except Exception as e:
             logger.error(f"Failed to get event DDL for {event_name}: {e}")
+        return ""
+
+    def get_view_ddl(self, view_name: str) -> str:
+        """Get DDL for a view."""
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(f"SHOW CREATE VIEW `{self.config.schema}`.`{view_name}`")
+                    result = cursor.fetchone()
+                    if result:
+                        return list(result.values())[1]  # Second column contains the DDL
+        except Exception as e:
+            logger.error(f"Failed to get view DDL for {view_name}: {e}")
+        return ""
+
+    def get_sequence_ddl(self, sequence_name: str) -> str:
+        """Get DDL for a sequence (MariaDB 10.3+)."""
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(f"SHOW CREATE SEQUENCE `{self.config.schema}`.`{sequence_name}`")
+                    result = cursor.fetchone()
+                    if result:
+                        return list(result.values())[1]  # Second column contains the DDL
+        except Exception as e:
+            logger.error(f"Failed to get sequence DDL for {sequence_name}: {e}")
         return ""

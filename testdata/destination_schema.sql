@@ -3,6 +3,7 @@
 -- This schema has intentional differences from the source to demonstrate migration capabilities
 
 -- Create the destination database
+DROP DATABASE IF EXISTS ddlwizard_dest_test;
 CREATE DATABASE IF NOT EXISTS ddlwizard_dest_test;
 USE ddlwizard_dest_test;
 
@@ -122,13 +123,32 @@ ALTER TABLE products
 ADD CONSTRAINT fk_products_category 
 FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL;
 
+-- Create table for stock alerts (must be created before triggers that reference it)
+CREATE TABLE stock_alerts (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    product_id INT NOT NULL,
+    alert_type ENUM('LOW_STOCK', 'OUT_OF_STOCK') NOT NULL,
+    is_resolved BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMP NULL,
+    INDEX idx_product (product_id),
+    INDEX idx_type (alert_type),
+    INDEX idx_resolved (is_resolved),
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+) ENGINE=InnoDB COMMENT='Stock level alerts';
+
 -- Updated stored procedure with different signature
 DELIMITER //
 CREATE PROCEDURE GetUserOrderHistory(
     IN user_id_param INT,
-    IN limit_param INT DEFAULT 10  -- Added parameter with default
+    IN limit_param INT  -- Removed DEFAULT 10 for MariaDB compatibility
 )
 BEGIN
+    -- Handle default value in procedure body
+    IF limit_param IS NULL OR limit_param <= 0 THEN
+        SET limit_param = 10;
+    END IF;
+    
     SELECT 
         o.id as order_id,
         o.order_number,
@@ -202,7 +222,7 @@ BEGIN
 END //
 DELIMITER ;
 
--- Different trigger with updated logic
+-- Different trigger with updated logic (now stock_alerts table exists)
 DELIMITER //
 CREATE TRIGGER update_stock_after_order
     AFTER INSERT ON order_items
@@ -228,7 +248,8 @@ CREATE TRIGGER generate_order_number
     FOR EACH ROW
 BEGIN
     IF NEW.order_number IS NULL THEN
-        SET NEW.order_number = CONCAT('ORD-', DATE_FORMAT(NOW(), '%Y%m%d'), '-', LPAD(NEW.id, 6, '0'));
+        -- Use timestamp and random number since AUTO_INCREMENT ID not available in BEFORE INSERT
+        SET NEW.order_number = CONCAT('ORD-', DATE_FORMAT(NOW(), '%Y%m%d'), '-', LPAD(FLOOR(RAND() * 999999), 6, '0'));
     END IF;
 END //
 DELIMITER ;
@@ -255,20 +276,6 @@ DO
         WHERE oi.product_id = p.id
         AND o.order_date >= DATE_SUB(NOW(), INTERVAL 30 DAY)
     );
-
--- Create table for stock alerts (referenced in trigger)
-CREATE TABLE stock_alerts (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    product_id INT NOT NULL,
-    alert_type ENUM('LOW_STOCK', 'OUT_OF_STOCK') NOT NULL,
-    is_resolved BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    resolved_at TIMESTAMP NULL,
-    INDEX idx_product (product_id),
-    INDEX idx_type (alert_type),
-    INDEX idx_resolved (is_resolved),
-    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
-) ENGINE=InnoDB COMMENT='Stock level alerts';
 
 -- Insert sample data with some differences
 INSERT INTO categories (name, description, sort_order, is_active) VALUES 

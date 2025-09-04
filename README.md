@@ -92,10 +92,10 @@ DDL Wizard includes sample test schemas to help you get started immediately:
 mysql -u root -p < testdata/source_schema.sql
 mysql -u root -p < testdata/destination_schema.sql
 
-# 2. Run comparison
+# 2. Run comparison (Evolution test: make basic schema look like enhanced)
 python main.py compare \
-  --source-host localhost --source-user root --source-password yourpass --source-schema ddlwizard_source_test \
-  --dest-host localhost --dest-user root --dest-password yourpass --dest-schema ddlwizard_dest_test \
+  --source-host localhost --source-user root --source-password yourpass --source-schema ddlwizard_dest_test \
+  --dest-host localhost --dest-user root --dest-password yourpass --dest-schema ddlwizard_source_test \
   --output-dir ./test_results
 ```
 
