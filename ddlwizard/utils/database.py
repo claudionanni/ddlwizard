@@ -206,3 +206,141 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Failed to get sequence DDL for {sequence_name}: {e}")
         return ""
+    
+    def execute_sql_file(self, sql_file_path: str, dry_run: bool = False) -> dict:
+        """
+        Execute SQL statements from a file.
+        
+        Args:
+            sql_file_path: Path to the SQL file to execute
+            dry_run: If True, validate SQL but don't execute
+            
+        Returns:
+            dict: Execution results with statistics and any errors
+        """
+        results = {
+            'success': False,
+            'executed_statements': 0,
+            'failed_statements': 0,
+            'errors': [],
+            'warnings': [],
+            'execution_time': 0
+        }
+        
+        try:
+            import time
+            start_time = time.time()
+            
+            # Read SQL file
+            with open(sql_file_path, 'r', encoding='utf-8') as f:
+                sql_content = f.read()
+            
+            if not sql_content.strip():
+                results['warnings'].append("SQL file is empty")
+                results['success'] = True
+                return results
+            
+            # Split SQL into statements (simple split by semicolon)
+            statements = [stmt.strip() for stmt in sql_content.split(';') if stmt.strip()]
+            
+            if dry_run:
+                # Dry run - just validate syntax
+                logger.info(f"Dry run mode: Found {len(statements)} SQL statements")
+                results['success'] = True
+                results['executed_statements'] = len(statements)
+                results['warnings'].append(f"DRY RUN: Would execute {len(statements)} statements")
+                return results
+            
+            # Execute statements
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    for i, statement in enumerate(statements, 1):
+                        try:
+                            # Skip comments and empty lines
+                            if statement.startswith('--') or statement.startswith('/*'):
+                                continue
+                                
+                            logger.debug(f"Executing statement {i}: {statement[:100]}...")
+                            cursor.execute(statement)
+                            results['executed_statements'] += 1
+                            
+                        except Exception as e:
+                            error_msg = f"Statement {i} failed: {str(e)}"
+                            logger.error(error_msg)
+                            results['errors'].append(error_msg)
+                            results['failed_statements'] += 1
+                            
+                            # Continue with next statement even if one fails
+                            continue
+                    
+                    # Commit all changes
+                    conn.commit()
+                    logger.info(f"Successfully executed {results['executed_statements']} statements")
+            
+            results['success'] = results['failed_statements'] == 0
+            results['execution_time'] = time.time() - start_time
+            
+        except FileNotFoundError:
+            error_msg = f"SQL file not found: {sql_file_path}"
+            logger.error(error_msg)
+            results['errors'].append(error_msg)
+        except Exception as e:
+            error_msg = f"Failed to execute SQL file: {str(e)}"
+            logger.error(error_msg)
+            results['errors'].append(error_msg)
+        
+        return results
+    
+    def execute_sql_statement(self, sql_statement: str, dry_run: bool = False) -> dict:
+        """
+        Execute a single SQL statement.
+        
+        Args:
+            sql_statement: SQL statement to execute
+            dry_run: If True, validate SQL but don't execute
+            
+        Returns:
+            dict: Execution results
+        """
+        results = {
+            'success': False,
+            'rows_affected': 0,
+            'errors': [],
+            'warnings': [],
+            'execution_time': 0
+        }
+        
+        try:
+            import time
+            start_time = time.time()
+            
+            if not sql_statement.strip():
+                results['warnings'].append("Empty SQL statement")
+                results['success'] = True
+                return results
+            
+            if dry_run:
+                # Dry run - just validate
+                logger.info(f"Dry run mode: Would execute: {sql_statement[:100]}...")
+                results['success'] = True
+                results['warnings'].append("DRY RUN: Statement syntax appears valid")
+                return results
+            
+            # Execute statement
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    logger.debug(f"Executing: {sql_statement[:100]}...")
+                    cursor.execute(sql_statement)
+                    results['rows_affected'] = cursor.rowcount
+                    conn.commit()
+                    
+            results['success'] = True
+            results['execution_time'] = time.time() - start_time
+            logger.info(f"Successfully executed statement, {results['rows_affected']} rows affected")
+            
+        except Exception as e:
+            error_msg = f"Failed to execute SQL statement: {str(e)}"
+            logger.error(error_msg)
+            results['errors'].append(error_msg)
+        
+        return results

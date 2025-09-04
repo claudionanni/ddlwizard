@@ -81,8 +81,8 @@ class SchemaComparator:
                 differences.append({
                     'type': ChangeType.MODIFY_COLUMN.value,
                     'column_name': col_name,
-                    'original_definition': source_def,
-                    'new_definition': dest_def,
+                    'original_definition': dest_def,
+                    'new_definition': source_def,
                     'description': f"Modify column '{col_name}'"
                 })
         
@@ -149,6 +149,9 @@ class SchemaComparator:
                     'new_definition': source_def,
                     'description': f"Modify foreign key constraint '{fk_name}'"
                 })
+        
+        # Compare table-level properties (COMMENT, ENGINE, etc.)
+        differences.extend(self._compare_table_properties(table_name, source_ddl, dest_ddl))
         
         return differences
     
@@ -815,3 +818,117 @@ class SchemaComparator:
         ])
         
         return '\n'.join(sql_lines)
+    
+    def _compare_table_properties(self, table_name: str, source_ddl: str, dest_ddl: str) -> List[Dict[str, Any]]:
+        """
+        Compare table-level properties like COMMENT, ENGINE, CHARSET, etc.
+        
+        Args:
+            table_name: Name of the table being compared
+            source_ddl: DDL of the source table
+            dest_ddl: DDL of the destination table
+            
+        Returns:
+            List of differences found in table properties
+        """
+        differences = []
+        
+        # Extract table properties from both DDLs
+        source_props = self._parse_table_properties(source_ddl)
+        dest_props = self._parse_table_properties(dest_ddl)
+        
+        # Compare COMMENT
+        source_comment = source_props.get('comment', '')
+        dest_comment = dest_props.get('comment', '')
+        
+        if source_comment != dest_comment:
+            differences.append({
+                'type': 'table_comment_modified',
+                'property': 'COMMENT',
+                'original_value': dest_comment,
+                'new_value': source_comment,
+                'description': f"Change table comment from '{dest_comment}' to '{source_comment}'"
+            })
+        
+        # Compare ENGINE
+        source_engine = source_props.get('engine', '')
+        dest_engine = dest_props.get('engine', '')
+        
+        if source_engine and dest_engine and source_engine != dest_engine:
+            differences.append({
+                'type': 'table_engine_modified',
+                'property': 'ENGINE',
+                'original_value': dest_engine,
+                'new_value': source_engine,
+                'description': f"Change table engine from '{dest_engine}' to '{source_engine}'"
+            })
+        
+        # Compare DEFAULT CHARSET
+        source_charset = source_props.get('charset', '')
+        dest_charset = dest_props.get('charset', '')
+        
+        if source_charset and dest_charset and source_charset != dest_charset:
+            differences.append({
+                'type': 'table_charset_modified',
+                'property': 'DEFAULT CHARSET',
+                'original_value': dest_charset,
+                'new_value': source_charset,
+                'description': f"Change table charset from '{dest_charset}' to '{source_charset}'"
+            })
+        
+        # Compare COLLATE
+        source_collate = source_props.get('collate', '')
+        dest_collate = dest_props.get('collate', '')
+        
+        if source_collate and dest_collate and source_collate != dest_collate:
+            differences.append({
+                'type': 'table_collate_modified',
+                'property': 'COLLATE',
+                'original_value': dest_collate,
+                'new_value': source_collate,
+                'description': f"Change table collation from '{dest_collate}' to '{source_collate}'"
+            })
+        
+        return differences
+    
+    def _parse_table_properties(self, ddl: str) -> Dict[str, str]:
+        """
+        Parse table-level properties from CREATE TABLE DDL.
+        
+        Args:
+            ddl: The CREATE TABLE DDL statement
+            
+        Returns:
+            Dictionary of table properties
+        """
+        properties = {}
+        
+        if not ddl:
+            return properties
+        
+        # Clean up the DDL for parsing
+        ddl_clean = re.sub(r'\s+', ' ', ddl.strip())
+        
+        # Extract COMMENT
+        comment_match = re.search(r"COMMENT=['\"]([^'\"]*)['\"]", ddl_clean, re.IGNORECASE)
+        if comment_match:
+            properties['comment'] = comment_match.group(1)
+        else:
+            properties['comment'] = ''
+        
+        # Extract ENGINE
+        engine_match = re.search(r"ENGINE=(\w+)", ddl_clean, re.IGNORECASE)
+        if engine_match:
+            properties['engine'] = engine_match.group(1)
+        
+        # Extract DEFAULT CHARSET
+        charset_match = re.search(r"DEFAULT\s+CHARSET=(\w+)", ddl_clean, re.IGNORECASE)
+        if charset_match:
+            properties['charset'] = charset_match.group(1)
+        
+        # Extract COLLATE
+        collate_match = re.search(r"COLLATE[=\s]+(\w+)", ddl_clean, re.IGNORECASE)
+        if collate_match:
+            properties['collate'] = collate_match.group(1)
+        
+        return properties

@@ -113,6 +113,22 @@ class AlterStatementGenerator:
                 report_lines.append(f"  {i}. Foreign Key REMOVED: {diff.get('constraint_name', 'unknown')}")
             elif diff_type == ChangeType.MODIFY_CONSTRAINT.value:
                 report_lines.append(f"  {i}. Foreign Key MODIFIED: {diff.get('constraint_name', 'unknown')}")
+            elif diff_type == 'table_comment_modified':
+                report_lines.append(f"  {i}. Table COMMENT MODIFIED:")
+                report_lines.append(f"      FROM: '{diff.get('original_value', '')}'")
+                report_lines.append(f"      TO:   '{diff.get('new_value', '')}'")
+            elif diff_type == 'table_engine_modified':
+                report_lines.append(f"  {i}. Table ENGINE MODIFIED:")
+                report_lines.append(f"      FROM: {diff.get('original_value', '')}")
+                report_lines.append(f"      TO:   {diff.get('new_value', '')}")
+            elif diff_type == 'table_charset_modified':
+                report_lines.append(f"  {i}. Table CHARSET MODIFIED:")
+                report_lines.append(f"      FROM: {diff.get('original_value', '')}")
+                report_lines.append(f"      TO:   {diff.get('new_value', '')}")
+            elif diff_type == 'table_collate_modified':
+                report_lines.append(f"  {i}. Table COLLATION MODIFIED:")
+                report_lines.append(f"      FROM: {diff.get('original_value', '')}")
+                report_lines.append(f"      TO:   {diff.get('new_value', '')}")
             else:
                 report_lines.append(f"  {i}. Unknown difference type: {diff_type}")
         
@@ -189,6 +205,19 @@ class AlterStatementGenerator:
                 # For modifying a constraint, we need to drop and recreate it
                 alter_statements.append(f"ALTER TABLE `{table_name}` DROP FOREIGN KEY IF EXISTS `{constraint_name}`")
                 alter_statements.append(f"ALTER TABLE `{table_name}` ADD {constraint_def}")
+            # Handle table property modifications
+            elif diff_type == 'table_comment_modified':
+                new_comment = diff.get('new_value', '')
+                alter_statements.append(f"ALTER TABLE `{table_name}` COMMENT='{new_comment}'")
+            elif diff_type == 'table_engine_modified':
+                new_engine = diff.get('new_value', '')
+                alter_statements.append(f"ALTER TABLE `{table_name}` ENGINE={new_engine}")
+            elif diff_type == 'table_charset_modified':
+                new_charset = diff.get('new_value', '')
+                alter_statements.append(f"ALTER TABLE `{table_name}` DEFAULT CHARSET={new_charset}")
+            elif diff_type == 'table_collate_modified':
+                new_collate = diff.get('new_value', '')
+                alter_statements.append(f"ALTER TABLE `{table_name}` COLLATE={new_collate}")
         
         return alter_statements
     
