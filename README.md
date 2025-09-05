@@ -4,6 +4,32 @@
 
 A comprehensive Python tool for MariaDB/MySQL schema management, version control, and automated migration generation. DDL Wizard provides professional-grade features for safe, reliable database schema evolution with **verified complete rollback functionality**.
 
+## 🔬 Technical Approach & Methodology
+
+**Important:** DDL Wizard uses an **experience-based pattern matching approach** rather than formal database grammar parsing. The tool has been developed through iterative refinement based on real-world test schemas and use cases.
+
+### What This Means:
+- **Coverage**: Currently handles the vast majority of common database objects and scenarios (~90% of typical use cases)
+- **Evolution**: Object detection and comparison logic improves continuously through testing and user feedback  
+- **Limitations**: May not handle every possible edge case or exotic DDL syntax variations
+- **Community-Driven**: Relies on user feedback to identify and address gaps in object detection
+
+### When to Expect Perfect Results:
+✅ Standard tables, columns, indexes, and constraints  
+✅ Common views, stored procedures, and functions  
+✅ Typical foreign key relationships and triggers  
+✅ Standard MariaDB/MySQL data types and configurations  
+
+### When to Review Results Carefully:
+⚠️ Complex or non-standard DDL syntax  
+⚠️ Exotic data types or storage engine configurations  
+⚠️ Very complex stored procedures with unusual syntax  
+⚠️ Custom or legacy database configurations  
+
+**We encourage users to report any objects or differences that aren't handled correctly to help improve the tool's coverage.**
+
+---
+
 ## 🎯 Latest Achievement (v1.2.1)
 
 ✅ **100% Round-Trip Testing Success** - Perfect migration and rollback capability  
@@ -342,7 +368,7 @@ While DDL Wizard provides comprehensive rollback generation, there are scenarios
 
 DDL Wizard is **ideal** for:
 
-✅ **Development to Staging Sync**: Keeping development and staging environments synchronized  
+✅ **Syncing Dev with Staging/Prod**: Bringing development environments back in sync when they've drifted from staging or production  
 ✅ **Continuous Integration**: Automated schema validation in CI/CD pipelines  
 ✅ **Schema Version Control**: Tracking database schema changes over time  
 ✅ **Development Workflow**: Applying schema changes across multiple development environments  
