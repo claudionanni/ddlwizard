@@ -55,7 +55,7 @@ DROP SEQUENCE IF EXISTS customer_id_seq;
 -- Categories table - MODIFIED: Different structure and constraints
 CREATE TABLE categories (
     category_id INT AUTO_INCREMENT PRIMARY KEY,
-    category_name VARCHAR(150) NOT NULL UNIQUE, -- DIFF: Renamed from 'name', increased length
+    category_name VARCHAR(150) NOT NULL UNIQUE, -- DIFF: Renamed from 'name', increased length. Safety: Rename won't be detected and column dropped.
     category_description TEXT,                  -- DIFF: Renamed from 'description'
     parent_category_id INT,                     -- DIFF: Renamed from 'parent_id'
     status ENUM('Active', 'Inactive') DEFAULT 'Active', -- DIFF: Changed from is_active boolean

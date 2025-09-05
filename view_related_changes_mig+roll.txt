@@ -1,0 +1,12 @@
+claudio@fedora:~/Projects/ddlwizard$ grep VIEW /tmp/ddw-F400/migration.sql 
+-- VIEWS CHANGES
+DROP VIEW IF EXISTS `ddlwizard_dest_test`.`inventory_report`;
+DROP VIEW IF EXISTS `ddlwizard_dest_test`.`sales_dashboard`;
+claudio@fedora:~/Projects/ddlwizard$ grep VIEW /tmp/ddw-F400/rollback.sql 
+DROP VIEW IF EXISTS `customer_summary`;
+DROP VIEW IF EXISTS `product_analytics`;
+DROP VIEW IF EXISTS `revenue_report`;
+DROP VIEW IF EXISTS `order_statistics`;
+CREATE ALGORITHM=UNDEFINED DEFINER=`sstuser`@`%` SQL SECURITY DEFINER VIEW `sales_dashboard` AS select cast(`o`.`created_at` as date) AS `sale_date`,count(distinct `o`.`order_id`) AS `total_orders`,count(distinct `o`.`user_id`) AS `unique_customers`,sum(`o`.`total_amount`) AS `daily_revenue`,avg(`o`.`total_amount`) AS `avg_order_value`,sum(`oi`.`quantity`) AS `total_items_sold`,count(case when `o`.`order_status` = 'Delivered' then 1 end) AS `delivered_orders`,count(case when `o`.`order_status` = 'Cancelled' then 1 end) AS `cancelled_orders` from (`orders` `o` left join `order_items` `oi` on(`o`.`order_id` = `oi`.`order_id`)) where `o`.`created_at` >= curdate() - interval 30 day group by cast(`o`.`created_at` as date) order by cast(`o`.`created_at` as date) desc;
+CREATE ALGORITHM=UNDEFINED DEFINER=`sstuser`@`%` SQL SECURITY DEFINER VIEW `inventory_report` AS select `p`.`product_id` AS `product_id`,`p`.`sku` AS `sku`,`p`.`product_name` AS `product_name`,`p`.`brand` AS `brand`,`c`.`category_name` AS `category_name`,`p`.`base_price` AS `base_price`,`p`.`sale_price` AS `sale_price`,`p`.`stock_quantity` AS `stock_quantity`,`p`.`low_stock_threshold` AS `low_stock_threshold`,`p`.`product_status` AS `product_status`,case when `p`.`stock_quantity` <= 0 then 'Out of Stock' when `p`.`stock_quantity` <= `p`.`low_stock_threshold` then 'Low Stock' else 'In Stock' end AS `stock_status`,coalesce(sum(`oi`.`quantity`),0) AS `total_sold_last_30_days` from (((`products` `p` left join `categories` `c` on(`p`.`category_id` = `c`.`category_id`)) left join `order_items` `oi` on(`p`.`product_id` = `oi`.`product_id`)) left join `orders` `o` on(`oi`.`order_id` = `o`.`order_id` and `o`.`created_at` >= curdate() - interval 30 day and `o`.`order_status` not in ('Cancelled','Refunded'))) group by `p`.`product_id`,`p`.`sku`,`p`.`product_name`,`p`.`brand`,`c`.`category_name`,`p`.`base_price`,`p`.`sale_price`,`p`.`stock_quantity`,`p`.`low_stock_threshold`,`p`.`product_status`;
+

@@ -1,0 +1,10 @@
+testdata/complexdata/source_schema.sql:DROP VIEW IF EXISTS customer_summary;
+testdata/complexdata/source_schema.sql:DROP VIEW IF EXISTS product_analytics;
+testdata/complexdata/source_schema.sql:DROP VIEW IF EXISTS order_statistics;
+testdata/complexdata/source_schema.sql:DROP VIEW IF EXISTS revenue_report;
+testdata/complexdata/source_schema.sql:-- VIEWS (4 complex views for analytics)
+testdata/complexdata/source_schema.sql:CREATE VIEW customer_summary AS
+testdata/complexdata/source_schema.sql:CREATE VIEW product_analytics AS
+testdata/complexdata/source_schema.sql:CREATE VIEW order_statistics AS
+testdata/complexdata/source_schema.sql:CREATE VIEW revenue_report AS
+

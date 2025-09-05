@@ -34,6 +34,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _add_sql_with_warnings(rollback_lines: List[str], sql_statement: str) -> None:
+    """Helper function to add SQL statement with SHOW WARNINGS for debugging."""
+    rollback_lines.append(sql_statement)
+    rollback_lines.append("SHOW WARNINGS;")
+
 def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_objects: Dict, alter_generator, get_source_ddl, get_dest_ddl) -> List[str]:
     """Generate detailed rollback SQL for all schema changes."""
     rollback_lines = []
@@ -71,7 +76,7 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
                 
                 if dest_ddl:
                     rollback_lines.append(f"-- Rollback table drop: {table_name}")
-                    rollback_lines.append(dest_ddl + ";")
+                    _add_sql_with_warnings(rollback_lines, dest_ddl + ";")
                     rollback_lines.append("")
             except Exception as e:
                 rollback_lines.append(f"-- ERROR: Failed to recreate table {table_name}: {str(e)}")
@@ -81,7 +86,7 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
         for table_name in tables_comparison.get('only_in_source', []):
             try:
                 rollback_lines.append(f"-- Rollback table creation: {table_name}")
-                rollback_lines.append(f"DROP TABLE IF EXISTS `{table_name}`;")
+                _add_sql_with_warnings(rollback_lines, f"DROP TABLE IF EXISTS `{table_name}`;")
                 rollback_lines.append("")
             except Exception as e:
                 rollback_lines.append(f"-- ERROR: Failed to drop table {table_name}: {str(e)}")
@@ -107,7 +112,7 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
                         dest_ddl = get_dest_ddl('tables', table_name) if table_name in tables_comparison.get('in_both', []) else ''
                         rollback_statements = alter_generator.generate_rollback_statements(table_name, differences, dest_ddl)
                         for stmt in rollback_statements:
-                            rollback_lines.append(stmt + ";")
+                            _add_sql_with_warnings(rollback_lines, stmt + ";")
                         rollback_lines.append("")
             except Exception as e:
                 rollback_lines.append(f"-- ERROR: Failed to process table {table_name}: {str(e)}")
@@ -129,7 +134,7 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
                 
                 if source_normalized != dest_normalized and dest_ddl:
                     rollback_lines.append(f"-- Rollback procedure: {proc_name}")
-                    rollback_lines.append(f"DROP PROCEDURE IF EXISTS `{proc_name}`;")
+                    _add_sql_with_warnings(rollback_lines, f"DROP PROCEDURE IF EXISTS `{proc_name}`;")
                     rollback_lines.append("DELIMITER $$")
                     rollback_lines.append(dest_ddl + "$$")
                     rollback_lines.append("DELIMITER ;")
@@ -144,7 +149,7 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
             try:
                 # Drop the created procedure
                 rollback_lines.append(f"-- Rollback creation of procedure: {proc_name}")
-                rollback_lines.append(f"DROP PROCEDURE IF EXISTS `{proc_name}`;")
+                _add_sql_with_warnings(rollback_lines, f"DROP PROCEDURE IF EXISTS `{proc_name}`;")
                 rollback_lines.append("")
             except Exception as e:
                 rollback_lines.append(f"-- ERROR: Failed to process procedure {proc_name}: {str(e)}")
@@ -361,8 +366,8 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
                 
                 if source_normalized != dest_normalized and dest_ddl:
                     rollback_lines.append(f"-- Rollback view: {view_name}")
-                    rollback_lines.append(f"DROP VIEW IF EXISTS `{view_name}`;")
-                    rollback_lines.append(dest_ddl + ";")
+                    _add_sql_with_warnings(rollback_lines, f"DROP VIEW IF EXISTS `{view_name}`;")
+                    _add_sql_with_warnings(rollback_lines, dest_ddl + ";")
                     rollback_lines.append("")
                     
             except Exception as e:
@@ -374,7 +379,7 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
             try:
                 # Drop the created view
                 rollback_lines.append(f"-- Rollback creation of view: {view_name}")
-                rollback_lines.append(f"DROP VIEW IF EXISTS `{view_name}`;")
+                _add_sql_with_warnings(rollback_lines, f"DROP VIEW IF EXISTS `{view_name}`;")
                 rollback_lines.append("")
             except Exception as e:
                 rollback_lines.append(f"-- ERROR: Failed to process view {view_name}: {str(e)}")

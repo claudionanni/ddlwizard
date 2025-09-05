@@ -193,6 +193,8 @@ class DDLWizardCore:
         def get_source_ddl(object_type: str, object_name: str) -> str:
             if object_type == 'tables':
                 return self.source_db.get_table_ddl(object_name)
+            elif object_type == 'views':
+                return self.source_db.get_view_ddl(object_name)
             elif object_type == 'functions':
                 return self.source_db.get_function_ddl(object_name)
             elif object_type == 'procedures':
@@ -206,6 +208,8 @@ class DDLWizardCore:
         def get_dest_ddl(object_type: str, object_name: str) -> str:
             if object_type == 'tables':
                 return self.dest_db.get_table_ddl(object_name)
+            elif object_type == 'views':
+                return self.dest_db.get_view_ddl(object_name)
             elif object_type == 'functions':
                 return self.dest_db.get_function_ddl(object_name)
             elif object_type == 'procedures':
@@ -237,6 +241,8 @@ class DDLWizardCore:
         def get_source_ddl(object_type: str, object_name: str) -> str:
             if object_type == 'tables':
                 return self.source_db.get_table_ddl(object_name)
+            elif object_type == 'views':
+                return self.source_db.get_view_ddl(object_name)
             elif object_type == 'functions':
                 return self.source_db.get_function_ddl(object_name)
             elif object_type == 'procedures':
@@ -250,6 +256,8 @@ class DDLWizardCore:
         def get_dest_ddl(object_type: str, object_name: str) -> str:
             if object_type == 'tables':
                 return self.dest_db.get_table_ddl(object_name)
+            elif object_type == 'views':
+                return self.dest_db.get_view_ddl(object_name)
             elif object_type == 'functions':
                 return self.dest_db.get_function_ddl(object_name)
             elif object_type == 'procedures':
@@ -292,6 +300,8 @@ class DDLWizardCore:
         def get_source_ddl(object_type: str, object_name: str) -> str:
             if object_type == 'tables':
                 return self.source_db.get_table_ddl(object_name)
+            elif object_type == 'views':
+                return self.source_db.get_view_ddl(object_name)
             elif object_type == 'functions':
                 return self.source_db.get_function_ddl(object_name)
             elif object_type == 'procedures':
@@ -305,6 +315,8 @@ class DDLWizardCore:
         def get_dest_ddl(object_type: str, object_name: str) -> str:
             if object_type == 'tables':
                 return self.dest_db.get_table_ddl(object_name)
+            elif object_type == 'views':
+                return self.dest_db.get_view_ddl(object_name)
             elif object_type == 'functions':
                 return self.dest_db.get_function_ddl(object_name)
             elif object_type == 'procedures':
@@ -440,6 +452,48 @@ class DDLWizardCore:
                             'object_name': func_name,
                             'operation': 'UPDATE',
                             'sql': f"DROP/CREATE FUNCTION {func_name}"
+                        })
+                except Exception:
+                    pass
+
+        # Add view changes
+        if 'views' in comparison:
+            views_comparison = comparison['views']
+            
+            # Views only in source (to be created)
+            for view_name in views_comparison.get('only_in_source', []):
+                detailed_changes.append({
+                    'type': 'VIEW',
+                    'object_type': 'view',
+                    'object_name': view_name,
+                    'operation': 'CREATE',
+                    'sql': f"CREATE VIEW {view_name}"
+                })
+            
+            # Views only in destination (to be dropped)
+            for view_name in views_comparison.get('only_in_dest', []):
+                detailed_changes.append({
+                    'type': 'VIEW',
+                    'object_type': 'view',
+                    'object_name': view_name,
+                    'operation': 'DROP',
+                    'sql': f"DROP VIEW {view_name}"
+                })
+            
+            # Views with differences (to be updated)
+            for view_name in views_comparison.get('in_both', []):
+                try:
+                    source_ddl = get_source_ddl('views', view_name)
+                    dest_ddl = get_dest_ddl('views', view_name)
+                    source_normalized = ' '.join(source_ddl.split()) if source_ddl else ''
+                    dest_normalized = ' '.join(dest_ddl.split()) if dest_ddl else ''
+                    if source_normalized != dest_normalized:
+                        detailed_changes.append({
+                            'type': 'VIEW',
+                            'object_type': 'view',
+                            'object_name': view_name,
+                            'operation': 'UPDATE',
+                            'sql': f"DROP/CREATE VIEW {view_name}"
                         })
                 except Exception:
                     pass
