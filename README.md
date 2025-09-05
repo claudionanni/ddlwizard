@@ -63,30 +63,112 @@ A comprehensive Python tool for MariaDB/MySQL schema management, version control
 - MariaDB or MySQL database access
 - Git (for version control features)
 
-## 🛠 Installation
+## 🛠 Installation & Setup
 
-1. Clone the repository:
+### Prerequisites
+- **Python 3.8+** (Python 3.9+ recommended)
+- **MariaDB 10.3+** or **MySQL 5.7+** database access
+- **Git** (for version control features)
+- **Administrative privileges** on target databases for DDL operations
+
+### Step 1: Clone the Repository
 ```bash
-git clone <repository-url>
+git clone https://github.com/claudionanni/ddlwizard.git
 cd ddlwizard
 ```
 
-2. Install dependencies:
+### Step 2: Install Python Dependencies
 ```bash
+# Install required packages
+pip install -r requirements.txt
+
+# Or if you prefer using a virtual environment (recommended):
+python -m venv ddlwizard-env
+source ddlwizard-env/bin/activate  # On Windows: ddlwizard-env\Scripts\activate
 pip install -r requirements.txt
 ```
 
-3. Verify installation:
+### Step 3: Verify Installation
 ```bash
-python main.py --help
+# Test the CLI
+python ddl_wizard.py --help
+
+# Test the GUI (optional)
+streamlit run ddlwizard/gui.py --server.port 8501
 ```
 
-4. **Optional**: Set up test databases for immediate testing:
+### Step 4: Set Up Test Environment (Optional but Recommended)
+DDL Wizard includes ready-to-use sample schemas for immediate testing:
+
 ```bash
-# Quick test with included sample schemas
-mysql -u root -p < testdata/source_schema.sql
-mysql -u root -p < testdata/destination_schema.sql
+# Create test databases in MariaDB/MySQL
+mysql -u root -p -e "CREATE DATABASE ddlwizard_source_test;"
+mysql -u root -p -e "CREATE DATABASE ddlwizard_dest_test;"
+
+# Load sample schemas
+mysql -u root -p ddlwizard_source_test < testdata/simpledata/source_schema.sql
+mysql -u root -p ddlwizard_dest_test < testdata/simpledata/destination_schema.sql
+
+# Test with sample data
+python ddl_wizard.py compare \
+  --source-host localhost --source-user root --source-password YOUR_PASSWORD --source-schema ddlwizard_source_test \
+  --dest-host localhost --dest-user root --dest-password YOUR_PASSWORD --dest-schema ddlwizard_dest_test
 ```
+
+### 🐳 Docker Alternative (Easy Setup)
+If you prefer Docker for testing:
+
+```bash
+# Start MariaDB test containers (see testdata/README.md for details)
+cd testdata
+docker-compose up -d
+
+# Test with Docker containers
+python ddl_wizard.py compare \
+  --source-host 127.0.0.1 --source-port 10622 --source-user sstuser --source-password sstpwd --source-schema ddlwizard_source_test \
+  --dest-host 127.0.0.1 --dest-port 20622 --dest-user sstuser --dest-password sstpwd --dest-schema ddlwizard_dest_test
+```
+
+### 🎯 Quick Validation Test
+After installation, run this simple test to ensure everything works:
+
+```bash
+# This should show version info and available commands
+python ddl_wizard.py --help
+
+# If you set up test databases, this should generate a migration
+python ddl_wizard.py compare \
+  --source-host localhost --source-user root --source-password YOUR_PASSWORD --source-schema ddlwizard_source_test \
+  --dest-host localhost --dest-user root --dest-password YOUR_PASSWORD --dest-schema ddlwizard_dest_test \
+  --dry-run
+```
+
+### 🔧 Troubleshooting Installation
+
+**Common Issues:**
+
+1. **"ModuleNotFoundError: No module named 'X'"**
+   ```bash
+   pip install -r requirements.txt --upgrade
+   ```
+
+2. **"Can't connect to database"**
+   - Verify database is running and accessible
+   - Check host, port, username, and password
+   - Ensure user has appropriate privileges (SELECT, SHOW, etc.)
+
+3. **"Permission denied" errors**
+   - Ensure database user has DDL privileges for schema operations
+   - For rollback testing, user needs CREATE/DROP privileges
+
+4. **Python version issues**
+   ```bash
+   python --version  # Should be 3.8+
+   # If not, install Python 3.8+ or use python3 command
+   python3 ddl_wizard.py --help
+   ```
+
+**Need Help?** Check [`testdata/README.md`](testdata/README.md) for detailed setup examples and Docker configurations.
 
 ## 🔄 Migration Guide (v1.1.0+)
 
