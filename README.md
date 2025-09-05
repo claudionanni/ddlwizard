@@ -300,6 +300,111 @@ objects = {
 }
 ```
 
+## ⚠️ Known Limitations and Important Considerations
+
+### 🚨 Production Use Warnings
+
+**DDL Wizard is primarily designed for development and staging environments.** While it provides comprehensive safety features and rollback capabilities, production use requires careful consideration of the following limitations:
+
+#### Data Safety Limitations
+- **No Data Migration**: DDL Wizard only handles database objects (tables, views, procedures, etc.) and **does not migrate actual data**
+- **Data Loss Scenarios**: Schema modifications can cause permanent data loss, particularly:
+  - **Column Removal**: If destination has extra columns, they will be dropped along with their data
+  - **Column Type Changes**: Incompatible type changes may truncate or lose data
+  - **Constraint Violations**: New constraints may fail if existing data doesn't comply
+- **Cannot Infer Column Renames**: The tool cannot automatically detect if a column was renamed vs. dropped/added, potentially causing data loss
+
+#### Schema Detection Limitations
+- **Column Renaming**: Cannot distinguish between a renamed column and a drop+add operation
+- **Table Renaming**: Cannot detect table renames; treats them as separate drop/create operations
+- **Complex Refactoring**: Multi-step schema refactoring may require manual intervention
+- **Custom Data Types**: Limited support for user-defined or non-standard data types
+
+#### Rollback Limitations
+While DDL Wizard provides comprehensive rollback generation, there are scenarios where rollback may fail:
+
+- **Data Dependency Issues**: If a rollback recreates a column with a unique constraint, it will fail if the recreated column contains duplicate empty/null values
+- **Auto-Increment Sequences**: AUTO_INCREMENT values are not preserved in rollbacks (intentionally, as they're data-dependent)
+- **Foreign Key Dependencies**: Complex foreign key relationships may require manual intervention in some edge cases
+- **Storage Engine Differences**: Different storage engines may have varying rollback behavior
+
+#### MariaDB/MySQL Version Compatibility
+- **Feature Availability**: Some features (like sequences) are only available in MariaDB 10.3+
+- **Syntax Variations**: Different versions may use different DDL syntax for the same objects
+- **Charset/Collation**: Behavior may vary between MySQL and MariaDB versions
+
+#### Performance Considerations
+- **Large Schemas**: Very large schemas (1000+ objects) may take significant time to analyze
+- **Network Latency**: Remote database connections may slow down extraction and comparison
+- **Memory Usage**: Complex schemas with many relationships may consume significant memory
+
+### 🎯 Recommended Use Cases
+
+DDL Wizard is **ideal** for:
+
+✅ **Development to Staging Sync**: Keeping development and staging environments synchronized  
+✅ **Continuous Integration**: Automated schema validation in CI/CD pipelines  
+✅ **Schema Version Control**: Tracking database schema changes over time  
+✅ **Development Workflow**: Applying schema changes across multiple development environments  
+✅ **Schema Documentation**: Generating comprehensive database documentation  
+
+DDL Wizard requires **extra caution** for:
+
+⚠️ **Production Deployments**: Requires thorough testing and manual oversight  
+⚠️ **Data-Critical Systems**: May cause data loss in certain scenarios  
+⚠️ **Complex Legacy Systems**: May require manual intervention for complex relationships  
+
+### 🛡️ Safety Best Practices
+
+To minimize risks when using DDL Wizard:
+
+1. **Always Test First**: Run migrations in a staging environment identical to production
+2. **Review Generated SQL**: Manually review all generated migration and rollback scripts
+3. **Backup Everything**: Create complete database backups before applying any migrations
+4. **Validate Rollbacks**: Test rollback scripts in a safe environment before production use
+5. **Monitor Data Integrity**: Verify data consistency after applying migrations
+6. **Use Version Control**: Keep track of all schema changes through Git integration
+7. **Staged Rollouts**: Apply changes incrementally rather than in large batches
+
+### 🔧 Technical Limitations
+
+#### Database Engine Support
+- **Primary Support**: MariaDB 10.x and MySQL 5.7+
+- **Limited Support**: Older MySQL versions may have compatibility issues
+- **No Support**: PostgreSQL, SQLite, or other database systems
+
+#### Object Type Limitations
+- **Views**: Complex views with non-standard syntax may not be perfectly handled
+- **Stored Procedures/Functions**: Very complex logic may require manual review
+- **Triggers**: Row-level triggers with complex logic may need special attention
+- **Events**: Scheduled events with complex timing may need verification
+
+#### Network and Security
+- **SSL Connections**: Limited SSL configuration options (uses database defaults)
+- **Authentication**: Supports standard MySQL authentication methods only
+- **Firewall**: Requires direct database port access (no SSH tunneling built-in)
+
+### 💡 Mitigation Strategies
+
+For production environments, consider these additional safeguards:
+
+- **Schema Validation Tools**: Use additional schema validation tools alongside DDL Wizard
+- **Data Migration Tools**: Combine with dedicated data migration tools for complex scenarios
+- **Monitoring**: Implement database monitoring to detect issues immediately after migrations
+- **Rollback Testing**: Always test rollback procedures before applying forward migrations
+- **Change Management**: Implement proper change management processes for all schema modifications
+
+### 📞 Getting Help
+
+If you encounter limitations or issues:
+
+1. **Check Documentation**: Review the complete documentation and examples
+2. **Test Environment**: Reproduce issues in a safe test environment  
+3. **Manual Review**: For complex scenarios, manual DDL review may be necessary
+4. **Community Support**: Engage with the community for best practices and solutions
+
+Remember: **DDL Wizard is a powerful tool that requires responsible use, especially in production environments.**
+
 ## 🛡️ Safety Features
 
 ### Safety Analysis

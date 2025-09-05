@@ -98,7 +98,8 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
                     
                     if differences:
                         # Generate rollback statements for this table
-                        rollback_statements = alter_generator.generate_rollback_statements(table_name, differences)
+                        dest_ddl = get_dest_ddl('tables', table_name) if table_name in tables_comparison.get('in_both', []) else ''
+                        rollback_statements = alter_generator.generate_rollback_statements(table_name, differences, dest_ddl)
                         for stmt in rollback_statements:
                             rollback_lines.append(stmt + ";")
                         rollback_lines.append("")
@@ -276,7 +277,11 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
                 if source_normalized != dest_normalized and dest_ddl:
                     rollback_lines.append(f"-- Rollback event: {event_name}")
                     rollback_lines.append(f"DROP EVENT IF EXISTS `{event_name}`;")
-                    rollback_lines.append(dest_ddl + ";")
+                    # Apply delimiter adaptation for Events (adds DELIMITER $$ / DELIMITER ;)
+                    from schema_comparator import SchemaComparator
+                    temp_comparator = SchemaComparator()
+                    adapted_ddl = temp_comparator._adapt_ddl_for_destination(dest_ddl, alter_generator.dest_schema)
+                    rollback_lines.append(adapted_ddl)
                     rollback_lines.append("")
                     
             except Exception as e:
@@ -300,7 +305,11 @@ def generate_detailed_rollback_sql(comparison: Dict, source_objects: Dict, dest_
                 dest_ddl = get_dest_ddl('events', event_name)
                 if dest_ddl:
                     rollback_lines.append(f"-- Rollback deletion of event: {event_name}")
-                    rollback_lines.append(dest_ddl + ";")
+                    # Apply delimiter adaptation for Events (adds DELIMITER $$ / DELIMITER ;)
+                    from schema_comparator import SchemaComparator
+                    temp_comparator = SchemaComparator()
+                    adapted_ddl = temp_comparator._adapt_ddl_for_destination(dest_ddl, alter_generator.dest_schema)
+                    rollback_lines.append(adapted_ddl)
                     rollback_lines.append("")
             except Exception as e:
                 rollback_lines.append(f"-- ERROR: Failed to restore event {event_name}: {str(e)}")

@@ -1,0 +1,58 @@
+--------------
+ALTER TABLE `categories` DROP COLUMN IF EXISTS `parent_category_id`
+--------------
+ERROR 1828 (HY000) at line 120 in file: '/tmp/ddw-K01/migration.sql': Cannot drop column 'parent_category_id': needed in a foreign key constraint 'ddlwizard_dest_test/categories_ibfk_1'
+
+
+--------------
+ALTER TABLE `categories` ADD UNIQUE KEY `name` (`name`)
+--------------
+ERROR 1062 (23000) at line 131 in file: '/tmp/ddw-K01/migration.sql': Duplicate entry '' for key 'name'
+
+
+--------------
+ALTER TABLE `products` MODIFY COLUMN `FULLTEXT` KEY `ft_search` (`name`,`description`,`short_description`)
+--------------
+ERROR 4161 (HY000) at line 249 in file: '/tmp/ddw-K01/migration.sql': Unknown data type: 'KEY'
+
+
+--------------
+ALTER TABLE `users` MODIFY COLUMN `gender` enum('M','F','Other') DEFAULT 'Other'
+--------------
+ERROR 1265 (01000) at line 340 in file: '/tmp/ddw-K01/migration.sql': Data truncated for column 'gender' at row 1
+
+--------------
+CREATE DEFINER=`sstuser`@`%` EVENT `cleanup_old_logs` ON SCHEDULE EVERY 1 DAY STARTS '2025-09-04 22:20:19' ON COMPLETION NOT PRESERVE ENABLE DO BEGIN
+    
+    DELETE FROM audit_log 
+    WHERE created_at < DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 1 YEAR)
+--------------
+ERROR 1064 (42000) at line 854 in file: '/tmp/ddw-K01/migration.sql': You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '' at line 4
+
+--------------
+END
+--------------
+
+ERROR 1064 (42000) at line 863 in file: '/tmp/ddw-K01/migration.sql': You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'END' at line 1
+
+--------------
+CREATE DEFINER=`sstuser`@`%` EVENT `update_statistics` ON SCHEDULE EVERY 1 DAY STARTS '2025-09-05 00:00:00' ON COMPLETION NOT PRESERVE ENABLE DO BEGIN
+    
+    UPDATE user_profiles up
+    SET total_purchases = (
+        SELECT COALESCE(SUM(o.total_amount), 0)
+        FROM orders o
+        WHERE o.user_id = up.user_id 
+          AND o.status NOT IN ('Cancelled', 'Refunded')
+    )
+--------------
+
+ERROR 1064 (42000) at line 867 in file: '/tmp/ddw-K01/migration.sql': You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '' at line 9
+
+
+--------------
+END
+--------------
+ERROR 1064 (42000) at line 885 in file: '/tmp/ddw-K01/migration.sql': You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'END' at line 1
+Query OK, 0 rows affected (0.001 sec)
+

@@ -1,0 +1,10 @@
+This tool is not intended for migrating production environments because is subject to limitations of automatic tools.
+A schema migration can determine dropping columns (if destination has extra columns compared to source) so that data will be lost,
+it CANNOT automatically infer if a column just changed name.
+It does not deal at all with data, just database objects.
+A typical use case is for continous integration if you need to sync dev / stage environements where you can reimport data from source if needed.
+It changes charsets, types, etc.
+The application of the migration should be supervised to understand if it is safe for the specific case.
+Rollback is also possible with limitations:
+If a destination schema has a column with a unique index and migration dropped such column, when reverting with rollback the column and the unique index will be recreated,
+nevertheless this operation will fail because the newly created column will have empty values.

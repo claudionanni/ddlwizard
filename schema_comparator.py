@@ -187,7 +187,7 @@ class SchemaComparator:
                 continue
                 
             # Skip constraints, keys, and indexes
-            if re.match(r'^\s*(PRIMARY\s+KEY|UNIQUE|INDEX|KEY|CONSTRAINT|FOREIGN\s+KEY)', part, re.IGNORECASE):
+            if re.match(r'^\s*(PRIMARY\s+KEY|UNIQUE|INDEX|KEY|CONSTRAINT|FOREIGN\s+KEY|FULLTEXT\s+KEY)', part, re.IGNORECASE):
                 continue
             
             # Extract column name (first word, possibly quoted)
@@ -195,6 +195,9 @@ class SchemaComparator:
             if col_match:
                 col_name = col_match.group(1)
                 col_def = col_match.group(2).strip()
+                
+                # Normalize column definition to remove redundant CHARACTER SET/COLLATE
+                col_def = self._normalize_column_definition(col_def)
                 columns[col_name] = col_def
         
         return columns
@@ -235,8 +238,18 @@ class SchemaComparator:
                re.match(r'^\s*FOREIGN\s+KEY', part, re.IGNORECASE):
                 continue
             
-            # Look for KEY or INDEX definitions
-            key_match = re.match(r'^\s*(UNIQUE\s+)?(KEY|INDEX)\s+`?([a-zA-Z_][a-zA-Z0-9_]*)`?\s*\((.*)\)', part, re.IGNORECASE)
+            # Look for KEY or INDEX definitions (including FULLTEXT)
+            # Pattern 1: FULLTEXT KEY name (columns)
+            fulltext_match = re.match(r'^\s*FULLTEXT\s+KEY\s+`?([a-zA-Z_][a-zA-Z0-9_]*)`?\s*\((.*)\)', part, re.IGNORECASE)
+            if fulltext_match:
+                index_name = fulltext_match.group(1)
+                index_columns = fulltext_match.group(2)
+                index_def = f"FULLTEXT KEY `{index_name}` ({index_columns})"
+                indexes[index_name] = index_def.strip()
+                continue
+            
+            # Pattern 2: UNIQUE/SPATIAL KEY or INDEX definitions
+            key_match = re.match(r'^\s*(UNIQUE\s+|SPATIAL\s+)?(KEY|INDEX)\s+`?([a-zA-Z_][a-zA-Z0-9_]*)`?\s*\((.*)\)', part, re.IGNORECASE)
             if key_match:
                 unique_prefix = key_match.group(1) or ''
                 index_type = key_match.group(2)
@@ -380,21 +393,22 @@ class SchemaComparator:
         
         adapted_ddl = ddl.strip()
         
-        # Check if this is a stored procedure, function, or trigger
+        # Check if this is a stored procedure, function, trigger, or event
         ddl_upper = adapted_ddl.upper()
         # Use regex to handle DEFINER clauses between CREATE and object type
         import re
-        is_stored_object = bool(re.search(r'CREATE\s+(?:DEFINER[^)]*\)?\s+)?(FUNCTION|PROCEDURE|TRIGGER)', ddl_upper))
+        is_stored_object = bool(re.search(r'CREATE\s+(?:DEFINER[^)]*\)?\s+)?(FUNCTION|PROCEDURE|TRIGGER|EVENT)', ddl_upper))
         
         if is_stored_object:
-            # For stored procedures, functions, and triggers, we need to:
-            # 1. Ensure proper semicolons within the body
-            # 2. Wrap with DELIMITER commands
+            # For stored procedures, functions, triggers, and events, we need proper DELIMITER handling
             
-            # For stored objects, we don't modify semicolons - just wrap with DELIMITER
             # Remove trailing semicolon if present (will be replaced with $$)
             if adapted_ddl.endswith(';'):
                 adapted_ddl = adapted_ddl[:-1]
+            
+            # Special handling for Events to fix the syntax issues
+            if 'EVENT' in ddl_upper:
+                adapted_ddl = self._fix_event_syntax(adapted_ddl)
             
             # Wrap with DELIMITER commands and add $$ terminator
             result = f"DELIMITER $$\n{adapted_ddl}$$\nDELIMITER ;"
@@ -404,6 +418,38 @@ class SchemaComparator:
             if not adapted_ddl.endswith(';'):
                 adapted_ddl += ';'
             return adapted_ddl
+    
+    def _fix_event_syntax(self, event_ddl: str) -> str:
+        """
+        Fix Event DDL syntax issues.
+        
+        Events need special handling for the DO clause and proper line breaks.
+        """
+        import re
+        
+        # Fix line break issues in DO BEGIN clause
+        # Replace "DO BEG IN" with "DO BEGIN" (fixes line break in wrong place)
+        event_ddl = re.sub(r'DO\s+BEG\s*IN', 'DO BEGIN', event_ddl, flags=re.IGNORECASE)
+        
+        # Ensure proper spacing around DO BEGIN
+        event_ddl = re.sub(r'DO\s*BEGIN', 'DO BEGIN', event_ddl, flags=re.IGNORECASE)
+        
+        # Make sure END statement is properly terminated for Events
+        # Events use $$ delimiter, so we don't add semicolon to END
+        lines = event_ddl.split('\n')
+        for i in range(len(lines) - 1, -1, -1):
+            line = lines[i].strip()
+            if line.upper() == 'END':
+                # For Events, END doesn't need semicolon (will be followed by $$)
+                lines[i] = 'END'
+                break
+            elif line.upper().startswith('END') and not line.endswith('$$'):
+                # Remove semicolon if present, since $$ will be added later
+                if line.endswith(';'):
+                    lines[i] = line[:-1]
+                break
+        
+        return '\n'.join(lines)
     
     def compare_objects(self, source_objects: Dict[str, List[Dict]], dest_objects: Dict[str, List[Dict]]) -> Dict[str, Any]:
         """
@@ -500,7 +546,8 @@ class SchemaComparator:
                                 sql_lines.append(f"-- {line}")
                             
                             # Generate ALTER statements
-                            alter_statements = alter_generator.generate_alter_statements(table_name, differences)
+                            dest_table_ddl = get_dest_ddl('tables', table_name) if table_name in tables_comparison.get('in_both', []) else ''
+                            alter_statements = alter_generator.generate_alter_statements(table_name, differences, dest_table_ddl)
                             for stmt in alter_statements:
                                 sql_lines.append(stmt + ";")
                             sql_lines.append("")
@@ -932,3 +979,83 @@ class SchemaComparator:
             properties['collate'] = collate_match.group(1)
         
         return properties
+
+    def _normalize_ddl_for_comparison(self, ddl: str, table_charset: str = None) -> str:
+        """
+        Normalize DDL for consistent comparison by removing redundant specifications.
+        
+        Args:
+            ddl: The DDL statement to normalize
+            table_charset: The table's default character set (if known)
+            
+        Returns:
+            Normalized DDL string
+        """
+        if not ddl:
+            return ''
+            
+        # Basic whitespace normalization
+        normalized = ' '.join(ddl.split())
+        
+        # Remove redundant CHARACTER SET and COLLATE specifications
+        # If a column has the same character set as the table default, remove explicit spec
+        if table_charset:
+            # Remove explicit CHARACTER SET that matches table default
+            pattern = rf'\s+CHARACTER SET {re.escape(table_charset)}\s+'
+            normalized = re.sub(pattern, ' ', normalized, flags=re.IGNORECASE)
+            
+            # Remove explicit COLLATE that matches the table default collation pattern
+            # For utf8mb4, common patterns are utf8mb4_general_ci, utf8mb4_unicode_ci
+            if 'utf8mb4' in table_charset.lower():
+                # Remove both general_ci and unicode_ci as they're common defaults
+                collate_pattern = r'\s+COLLATE utf8mb4_(?:general_ci|unicode_ci)\s+'
+                normalized = re.sub(collate_pattern, ' ', normalized, flags=re.IGNORECASE)
+        
+        # Generic CHARACTER SET/COLLATE cleanup for consistency
+        # Remove extra spaces around CHARACTER SET and COLLATE
+        normalized = re.sub(r'\s+CHARACTER\s+SET\s+', ' CHARACTER SET ', normalized, flags=re.IGNORECASE)
+        normalized = re.sub(r'\s+COLLATE\s+', ' COLLATE ', normalized, flags=re.IGNORECASE)
+        
+        # Normalize multiple spaces to single space
+        normalized = re.sub(r'\s+', ' ', normalized)
+        
+        return normalized.strip()
+
+    def _normalize_column_definition(self, col_def: str) -> str:
+        """
+        Normalize column definition by removing redundant CHARACTER SET and COLLATE specifications.
+        
+        Args:
+            col_def: Column definition string
+            
+        Returns:
+            Normalized column definition
+        """
+        if not col_def:
+            return col_def
+            
+        # Remove redundant CHARACTER SET and COLLATE specifications
+        # These are commonly added by MariaDB when showing CREATE TABLE even if not originally specified
+        
+        # Remove common utf8mb4 character set and collation combinations that are typically defaults
+        normalized = col_def
+        
+        # Remove CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci (common default)
+        normalized = re.sub(r'\s+CHARACTER\s+SET\s+utf8mb4\s+COLLATE\s+utf8mb4_general_ci\b', '', normalized, flags=re.IGNORECASE)
+        
+        # Remove CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+        normalized = re.sub(r'\s+CHARACTER\s+SET\s+utf8mb4\s+COLLATE\s+utf8mb4_unicode_ci\b', '', normalized, flags=re.IGNORECASE)
+        
+        # Remove standalone CHARACTER SET utf8mb4 (if no explicit COLLATE follows)
+        normalized = re.sub(r'\s+CHARACTER\s+SET\s+utf8mb4\b(?!\s+COLLATE)', '', normalized, flags=re.IGNORECASE)
+        
+        # Remove standalone COLLATE utf8mb4_general_ci
+        normalized = re.sub(r'\s+COLLATE\s+utf8mb4_general_ci\b', '', normalized, flags=re.IGNORECASE)
+        
+        # Remove standalone COLLATE utf8mb4_unicode_ci  
+        normalized = re.sub(r'\s+COLLATE\s+utf8mb4_unicode_ci\b', '', normalized, flags=re.IGNORECASE)
+        
+        # Clean up multiple spaces
+        normalized = re.sub(r'\s+', ' ', normalized).strip()
+        
+        return normalized
