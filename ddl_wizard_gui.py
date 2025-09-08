@@ -1508,6 +1508,19 @@ def display_sidebar_info():
         
         st.markdown("---")
         
+        # GitHub repository links
+        st.markdown("### 🔗 **Project Links**")
+        st.markdown("""
+        [![GitHub](https://img.shields.io/badge/GitHub-ddlwizard-blue?style=flat&logo=github)](https://github.com/claudionanni/ddlwizard)
+        
+        🔗 [**Repository**](https://github.com/claudionanni/ddlwizard)  
+        📖 [**Documentation**](https://github.com/claudionanni/ddlwizard#readme)  
+        🐛 [**Report Issues**](https://github.com/claudionanni/ddlwizard/issues)  
+        📋 [**Contributing**](https://github.com/claudionanni/ddlwizard/blob/main/CONTRIBUTING.md)
+        """)
+        
+        st.markdown("---")
+        
         # Quick actions
         st.markdown("### ⚡ **Quick Actions**")
         
