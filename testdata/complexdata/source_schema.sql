@@ -1,9 +1,9 @@
 -- DDL Wizard Advanced Test Data - Source Schema
 -- Complex database with 30+ differences for comprehensive testing
 -- Created: September 4, 2025
-DROP DATABASE IF EXISTS ddlwizard_source_test;
-CREATE DATABASE IF NOT EXISTS ddlwizard_source_test;
-USE ddlwizard_source_test;
+DROP DATABASE IF EXISTS ddw_test_src;
+CREATE DATABASE IF NOT EXISTS ddw_test_src;
+USE ddw_test_src;
 
 -- Drop existing objects if they exist
 DROP TABLE IF EXISTS order_items;

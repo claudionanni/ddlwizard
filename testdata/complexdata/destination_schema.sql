@@ -2,9 +2,9 @@
 -- Complex database with 30+ differences from source for comprehensive testing
 -- Created: September 4, 2025
 
-DROP DATABASE IF EXISTS ddlwizard_dest_test;
-CREATE DATABASE IF NOT EXISTS ddlwizard_dest_test;
-USE ddlwizard_dest_test;
+DROP DATABASE IF EXISTS ddw_test_dst;
+CREATE DATABASE IF NOT EXISTS ddw_test_dst;
+USE ddw_test_dst;
 
 -- Drop existing objects if they exist
 DROP TABLE IF EXISTS order_items;
@@ -447,8 +447,64 @@ GROUP BY p.product_id, p.sku, p.product_name, p.brand, c.category_name,
 -- =============================================================================
 -- STORED PROCEDURES (Different procedures)
 -- =============================================================================
-
 DELIMITER $$
+
+-- Procedure to process a new order
+CREATE PROCEDURE process_order(
+    IN p_user_id INT,
+    IN p_order_data JSON,
+    OUT p_order_id INT,
+    OUT p_result_message VARCHAR(255)
+)
+BEGIN
+    DECLARE v_order_number VARCHAR(50);
+    DECLARE v_total_amount DECIMAL(12,2) DEFAULT 0.00;
+    DECLARE v_error_count INT DEFAULT 0;
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SET p_result_message = 'Error processing order: Database error occurred!!';
+        SET p_order_id = 0;
+    END;
+
+    START TRANSACTION;
+
+    -- Generate order number
+    SET v_order_number = CONCAT('ORD-', NEXTVAL(order_number_seq));
+
+    -- Validate user exists and is active
+    SELECT COUNT(*) INTO v_error_count
+    FROM users
+    WHERE user_id = p_user_id AND status = 'Active';
+
+    IF v_error_count = 0 THEN
+        SET p_result_message = 'Error: User not found or inactive';
+        SET p_order_id = 0;
+        ROLLBACK;
+    ELSE
+        -- Extract total amount from JSON
+        SET v_total_amount = JSON_UNQUOTE(JSON_EXTRACT(p_order_data, '$.total_amount'));
+
+        -- Create order
+        INSERT INTO orders (
+            order_number, user_id, status, payment_status,
+            currency, subtotal, tax_amount, shipping_amount,
+            total_amount, billing_address, shipping_address
+        ) VALUES (
+            v_order_number, p_user_id, 'Pending', 'Pending',
+            'USD', v_total_amount, 0.00, 0.00,
+            v_total_amount,
+            JSON_EXTRACT(p_order_data, '$.billing_address'),
+            JSON_EXTRACT(p_order_data, '$.shipping_address')
+        );
+
+        SET p_order_id = LAST_INSERT_ID();
+        SET p_result_message = CONCAT('Order created successfully: ', v_order_number);
+
+        COMMIT;
+    END IF;
+END$$
+
 
 -- Process order - MISSING: This procedure doesn't exist in destination
 -- Update inventory - MISSING: This procedure doesn't exist in destination

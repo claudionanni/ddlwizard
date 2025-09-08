@@ -27,6 +27,10 @@ from pathlib import Path
 from dataclasses import dataclass
 import json
 
+# Import the new analyzers
+from data_loss_analyzer import DataLossAnalyzer
+from schema_dependency_analyzer import SchemaDependencyAnalyzer
+
 logger = logging.getLogger(__name__)
 
 
@@ -417,9 +421,33 @@ class SchemaVisualizer:
             logger.error(f"Failed to export documentation: {e}")
 
 
-def generate_migration_report(comparison_result: Dict[str, Any], output_file: str):
-    """Generate a comprehensive migration report."""
+def generate_migration_report(comparison_result: Dict[str, Any], migration_sql: str, output_file: str):
+    """Generate a comprehensive migration report with data loss analysis and dependency visualization."""
     try:
+        from datetime import datetime
+        
+        # Initialize analyzers
+        data_loss_analyzer = DataLossAnalyzer()
+        dependency_analyzer = SchemaDependencyAnalyzer()
+        
+        # Analyze data loss risks
+        data_loss_warnings = data_loss_analyzer.analyze_migration_sql(migration_sql, comparison_result)
+        
+        # Generate dependency analysis if schema objects are available
+        dependency_analysis = None
+        if 'source_objects' in comparison_result:
+            dest_objects = comparison_result.get('dest_objects', comparison_result.get('destination_objects'))
+            print(f"🔍 VISUALIZER DEBUG: source_objects found")
+            print(f"🔍 VISUALIZER DEBUG: dest_objects = {dest_objects is not None}")
+            if dest_objects:
+                print(f"🔍 VISUALIZER DEBUG: dest_objects keys = {list(dest_objects.keys())}")
+            dependency_analysis = dependency_analyzer.analyze_schema_dependencies(
+                comparison_result['source_objects'],
+                dest_objects
+            )
+        else:
+            print(f"❌ VISUALIZER DEBUG: No source_objects in comparison_result")
+        
         report = [
             "# Database Migration Report",
             f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
@@ -430,20 +458,236 @@ def generate_migration_report(comparison_result: Dict[str, Any], output_file: st
             ""
         ]
         
+        # Add data loss analysis section
+        if data_loss_warnings:
+            report.append("## ⚠️  DATA LOSS RISK ANALYSIS")
+            report.append("")
+            
+            # Group warnings by risk level
+            risk_groups = {}
+            for warning in data_loss_warnings:
+                risk_level = warning.risk_level.value
+                if risk_level not in risk_groups:
+                    risk_groups[risk_level] = []
+                risk_groups[risk_level].append(warning)
+            
+            # Display warnings by severity
+            for risk_level in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']:
+                if risk_level in risk_groups:
+                    warnings = risk_groups[risk_level]
+                    icon = {'CRITICAL': '🚨', 'HIGH': '⚠️', 'MEDIUM': '⚡', 'LOW': 'ℹ️'}[risk_level]
+                    
+                    report.append(f"### {icon} {risk_level} Risk Operations ({len(warnings)})")
+                    report.append("")
+                    
+                    for warning in warnings:
+                        report.append(f"**{warning.operation}**: {warning.object_name}")
+                        report.append(f"- **Impact**: {warning.impact}")
+                        report.append(f"- **Mitigation**: {warning.mitigation}")
+                        if warning.sql_statement:
+                            report.append(f"- **SQL**: `{warning.sql_statement[:100]}...`")
+                        report.append("")
+            
+            # Add summary statistics
+            total_warnings = len(data_loss_warnings)
+            critical_count = len(risk_groups.get('CRITICAL', []))
+            high_count = len(risk_groups.get('HIGH', []))
+            
+            report.append(f"**Risk Summary**: {total_warnings} total warnings ({critical_count} critical, {high_count} high risk)")
+            report.append("")
+            
+            if critical_count > 0:
+                report.append("🛑 **RECOMMENDATION**: Do not proceed without addressing critical risks!")
+                report.append("")
+        else:
+            report.append("## ✅ DATA LOSS ANALYSIS")
+            report.append("")
+            report.append("No potential data loss operations detected.")
+            report.append("")
+        
+        # Add dependency analysis section
+        if dependency_analysis:
+            summary = dependency_analysis['summary']
+            report.append("## 🔗 SCHEMA DEPENDENCY ANALYSIS")
+            report.append("")
+            
+            report.append(f"- **Total Objects**: {summary['total_objects']}")
+            report.append(f"- **Total Relationships**: {summary['total_relations']}")
+            report.append("")
+            
+            # Objects by type
+            if summary['objects_by_type']:
+                report.append("### Objects by Type")
+                for obj_type, count in summary['objects_by_type'].items():
+                    report.append(f"- {obj_type.title()}: {count}")
+                report.append("")
+            
+            # Most referenced objects (critical dependencies)
+            if summary['most_referenced_objects']:
+                report.append("### 📍 Most Referenced Objects (Critical Dependencies)")
+                report.append("")
+                for obj in summary['most_referenced_objects'][:5]:
+                    if obj['dependent_count'] > 0:
+                        report.append(f"- **{obj['name']}**: {obj['dependent_count']} dependents")
+                report.append("")
+                report.append("⚠️  **Note**: Changes to these objects may impact many other database objects.")
+                report.append("")
+            
+            # Most dependent objects
+            if summary['most_dependent_objects']:
+                report.append("### 🔗 Most Dependent Objects")
+                report.append("")
+                for obj in summary['most_dependent_objects'][:5]:
+                    if obj['dependency_count'] > 0:
+                        report.append(f"- **{obj['name']}**: {obj['dependency_count']} dependencies")
+                report.append("")
+            
+            # Isolated objects
+            if summary['isolated_objects']:
+                report.append("### 🏝️  Isolated Objects")
+                report.append("")
+                report.append("The following objects have no dependencies and are not referenced by other objects:")
+                for obj in summary['isolated_objects'][:10]:  # Limit to first 10
+                    report.append(f"- {obj}")
+                if len(summary['isolated_objects']) > 10:
+                    report.append(f"- ... and {len(summary['isolated_objects']) - 10} more")
+                report.append("")
+        
         # Tables summary
         if 'tables' in comparison_result:
             tables_diff = comparison_result['tables']
             
-            if 'added' in tables_diff:
-                report.append(f"- Tables to add: {len(tables_diff['added'])}")
-            if 'removed' in tables_diff:
-                report.append(f"- Tables to remove: {len(tables_diff['removed'])}")
-            if 'modified' in tables_diff:
-                report.append(f"- Tables to modify: {len(tables_diff['modified'])}")
+            report.append("## 📊 MIGRATION SUMMARY")
+            report.append("")
+            
+            if 'only_in_source' in tables_diff:
+                report.append(f"- Tables to add: {len(tables_diff['only_in_source'])}")
+            if 'only_in_dest' in tables_diff:
+                report.append(f"- Tables to remove: {len(tables_diff['only_in_dest'])}")
+            if 'in_both' in tables_diff:
+                report.append(f"- Tables to potentially modify: {len(tables_diff['in_both'])}")
         
         report.append("")
         
-        # Detailed changes
+        # Detailed changes section
+        report.append("## 📋 DETAILED CHANGES")
+        report.append("")
+        
+        # Add sections for each object type
+        object_types = ['tables', 'views', 'procedures', 'functions', 'triggers', 'events', 'sequences']
+        
+        for obj_type in object_types:
+            if obj_type in comparison_result:
+                obj_diff = comparison_result[obj_type]
+                
+                # Only add section if there are changes
+                has_changes = (
+                    obj_diff.get('only_in_source', []) or 
+                    obj_diff.get('only_in_dest', []) or
+                    obj_diff.get('in_both', [])
+                )
+                
+                if has_changes:
+                    report.append(f"### {obj_type.title()}")
+                    report.append("")
+                    
+                    if obj_diff.get('only_in_source'):
+                        report.append(f"**To be added ({len(obj_diff['only_in_source'])}):**")
+                        for obj_name in obj_diff['only_in_source']:
+                            report.append(f"- {obj_name}")
+                        report.append("")
+                    
+                    if obj_diff.get('only_in_dest'):
+                        report.append(f"**To be removed ({len(obj_diff['only_in_dest'])}):**")
+                        for obj_name in obj_diff['only_in_dest']:
+                            report.append(f"- {obj_name}")
+                        report.append("")
+                    
+                    if obj_diff.get('in_both'):
+                        report.append(f"**Exists in both (potential modifications) ({len(obj_diff['in_both'])}):**")
+                        for obj_name in obj_diff['in_both']:
+                            report.append(f"- {obj_name}")
+                        report.append("")
+        
+        # Add visualization files info
+        if dependency_analysis:
+            report.append("## 📊 VISUALIZATION FILES")
+            report.append("")
+            report.append("The following visualization files have been generated:")
+            report.append("- `schema_dependencies.json` - Raw dependency data")
+            report.append("- `schema_dependencies.dot` - Graphviz format (use with `dot` command)")
+            report.append("- `schema_dependencies.mmd` - Mermaid diagram (use with Mermaid tools)")
+            report.append("- `dependency_report.txt` - Detailed text report")
+            report.append("")
+            report.append("**To generate visual diagrams:**")
+            report.append("```bash")
+            report.append("# For PNG image using Graphviz")
+            report.append("dot -Tpng schema_dependencies.dot -o schema_dependencies.png")
+            report.append("")
+            report.append("# For SVG using Graphviz")
+            report.append("dot -Tsvg schema_dependencies.dot -o schema_dependencies.svg")
+            report.append("```")
+            report.append("")
+        
+        # Add migration execution recommendations
+        report.append("## 🚀 EXECUTION RECOMMENDATIONS")
+        report.append("")
+        
+        if data_loss_warnings:
+            critical_warnings = [w for w in data_loss_warnings if w.risk_level.value == 'CRITICAL']
+            high_warnings = [w for w in data_loss_warnings if w.risk_level.value == 'HIGH']
+            
+            if critical_warnings:
+                report.append("1. **🛑 STOP**: Critical data loss risks detected!")
+                report.append("   - Review all critical warnings above")
+                report.append("   - Export affected data before proceeding")
+                report.append("   - Consider excluding risky operations")
+                report.append("")
+            elif high_warnings:
+                report.append("1. **⚠️  CAUTION**: High data loss risks detected!")
+                report.append("   - Review all high-risk warnings above")
+                report.append("   - Test migration on a copy first")
+                report.append("   - Ensure backups are available")
+                report.append("")
+        
+        report.append("2. **💾 Backup**: Always create full database backup before migration")
+        report.append("3. **🧪 Test**: Test migration on development/staging environment first")
+        report.append("4. **📊 Monitor**: Monitor system performance after migration")
+        report.append("5. **📋 Rollback**: Keep rollback script ready in case of issues")
+        report.append("")
+        
+        # Write the report
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(report))
+        
+        # Export dependency visualizations if available
+        if dependency_analysis:
+            output_dir = Path(output_file).parent
+            # Pass comparison_result as migration_info for enhanced visualization
+            dependency_analyzer.export_to_file(dependency_analysis, str(output_dir), comparison_result)
+        
+        logger.info(f"Enhanced migration report generated: {output_file}")
+        
+    except Exception as e:
+        logger.error(f"Failed to generate enhanced migration report: {e}")
+        # Fallback to basic report
+        _generate_basic_migration_report(comparison_result, output_file)
+
+
+def _generate_basic_migration_report(comparison_result: Dict[str, Any], output_file: str):
+    """Fallback basic migration report generation."""
+    try:
+        from datetime import datetime
+        
+        report = [
+            "# Database Migration Report",
+            f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            "",
+            "## Summary",
+            f"- Source Schema: {comparison_result.get('source_schema', 'Unknown')}",
+            f"- Destination Schema: {comparison_result.get('dest_schema', comparison_result.get('destination_schema', 'Unknown'))}",
+            ""
+        ]
         if 'detailed_changes' in comparison_result:
             report.append("## Detailed Changes")
             report.append("")

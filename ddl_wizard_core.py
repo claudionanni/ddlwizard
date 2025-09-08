@@ -537,12 +537,14 @@ class DDLWizardCore:
             'comparison_data': comparison  # Include full comparison data for detailed reporting
         }
     
-    def generate_schema_visualization(self, source_objects: Dict, output_dir: str):
+    def generate_schema_visualization(self, source_objects: Dict, dest_objects: Dict, comparison: Dict, output_dir: str):
         """
-        Generate schema visualization files.
+        Generate schema visualization files including dependency analysis.
         
         Args:
             source_objects: Source database objects
+            dest_objects: Destination database objects  
+            comparison: Schema comparison results
             output_dir: Output directory for visualization files
         """
         logger.info("Generating schema visualizations...")
@@ -561,6 +563,9 @@ class DDLWizardCore:
         self.visualizer.export_documentation(str(visualization_output_dir))
         
         logger.info(f"Schema visualizations generated in {visualization_output_dir}")
+        
+        # Note: Dependency analysis is handled by the schema visualizer with migration report
+        # The visualizer already calls the dependency analyzer with both source and destination objects
     
     def record_migration_history(self, migration_name: str, source_config: DatabaseConfig, 
                                dest_config: DatabaseConfig, operation_count: int, 
@@ -592,7 +597,8 @@ class DDLWizardCore:
         return migration_id
     
     def write_migration_files(self, migration_sql: str, rollback_sql: str, 
-                            migration_report_data: Dict, output_dir: str) -> Tuple[str, str, str]:
+                            migration_report_data: Dict, output_dir: str,
+                            comparison: Dict = None, source_objects: Dict = None) -> Tuple[str, str, str]:
         """
         Write migration files to disk.
         
@@ -601,6 +607,8 @@ class DDLWizardCore:
             rollback_sql: Rollback SQL content
             migration_report_data: Migration report data
             output_dir: Output directory
+            comparison: Schema comparison results (for enhanced reporting)
+            source_objects: Source database objects (for dependency analysis)
             
         Returns:
             Tuple[str, str, str]: Paths to migration file, rollback file, migration report
@@ -616,8 +624,15 @@ class DDLWizardCore:
         migration_file.write_text(migration_sql)
         rollback_file.write_text(rollback_sql)
         
-        # Generate migration report
-        generate_migration_report(migration_report_data, str(migration_report_path))
+        # Generate migration report with enhanced analysis
+        if comparison is not None and source_objects is not None:
+            # Create enhanced comparison data with source objects for dependency analysis
+            enhanced_comparison = comparison.copy()
+            enhanced_comparison['source_objects'] = source_objects
+            generate_migration_report(enhanced_comparison, migration_sql, str(migration_report_path))
+        else:
+            # Fallback to standard report generation
+            generate_migration_report(migration_report_data, migration_sql, str(migration_report_path))
         
         # Generate migration summary table
         comparison_summary = self._generate_comparison_summary(migration_report_data)
@@ -846,11 +861,12 @@ def run_complete_migration(source_config: DatabaseConfig, dest_config: DatabaseC
     
     # Generate schema visualization if requested
     if enable_visualization:
-        core.generate_schema_visualization(source_objects, output_dir)
+        core.generate_schema_visualization(source_objects, dest_objects, comparison, output_dir)
     
     # Write files
     migration_file, rollback_file, migration_report_file = core.write_migration_files(
-        migration_sql, rollback_sql, migration_report_data, output_dir
+        migration_sql, rollback_sql, migration_report_data, output_dir, 
+        comparison, source_objects
     )
     
     # Record in history
@@ -866,6 +882,7 @@ def run_complete_migration(source_config: DatabaseConfig, dest_config: DatabaseC
         'migration_file': migration_file,
         'rollback_file': rollback_file,
         'migration_report_file': migration_report_file,
+        'output_dir': output_dir,
         'operation_count': operation_count,
         'safety_warnings': safety_warnings,
         'comparison': comparison,

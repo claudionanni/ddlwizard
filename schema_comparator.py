@@ -405,6 +405,10 @@ class SchemaComparator:
                 'in_both': list(source_names & dest_names)
             }
         
+        # Include source and destination objects for dependency analysis
+        comparison['source_objects'] = source_objects
+        comparison['dest_objects'] = dest_objects
+        
         return comparison
     
     def _adapt_ddl_for_destination(self, ddl: str, dest_schema: str) -> str:

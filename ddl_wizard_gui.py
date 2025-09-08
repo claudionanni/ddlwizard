@@ -25,6 +25,7 @@ This provides an easy-to-use interface for database schema migrations.
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import os
 import json
@@ -617,6 +618,9 @@ def display_migration_results(results: Dict[str, Any]):
     st.subheader("📊 Schema Comparison Summary")
     display_comparison_summary_table(results['comparison'])
     
+    # Schema dependency visualization
+    display_dependency_graph(results.get('output_dir'))
+    
     # Comparison details in scrollable container
     if st.checkbox("Show Detailed Comparison", value=False):
         st.subheader("🔍 Schema Comparison Details")
@@ -625,6 +629,70 @@ def display_migration_results(results: Dict[str, Any]):
         """, unsafe_allow_html=True)
         st.json(results['comparison'])
         st.markdown("</div>", unsafe_allow_html=True)
+
+
+def parse_modified_objects_from_migration():
+    """
+    Parse the migration SQL file to extract actually modified objects.
+    
+    Returns:
+        Dict[str, List[str]]: Dictionary of object types and their modified object names
+    """
+    modified_objects = {
+        'tables': [],
+        'views': [],
+        'procedures': [],
+        'functions': [],
+        'triggers': [],
+        'events': [],
+        'sequences': []
+    }
+    
+    # Try to read migration.sql from session state or current results
+    migration_files = []
+    
+    # First, try to get the current output directory from session state or results
+    if hasattr(st.session_state, 'migration_results') and st.session_state.migration_results:
+        output_dir = st.session_state.migration_results.get('output_dir')
+        if output_dir:
+            migration_files.append(os.path.join(output_dir, 'migration.sql'))
+    
+    # Fallback to common locations
+    migration_files.extend([
+        './ddl_output/migration.sql',
+        'ddl_output/migration.sql'
+    ])
+    
+    migration_content = None
+    migration_file_used = None
+    for file_path in migration_files:
+        try:
+            if os.path.exists(file_path):
+                with open(file_path, 'r') as f:
+                    migration_content = f.read()
+                migration_file_used = file_path
+                break
+        except Exception:
+            continue
+    
+    if migration_content:
+        # Parse different modification patterns
+        patterns = {
+            'tables': r'-- Modify table: (\w+)',
+            'views': r'-- Modify view: (\w+)',
+            'procedures': r'-- Modify procedure: (\w+)',
+            'functions': r'-- Modify function: (\w+)',
+            'triggers': r'-- Modify trigger: (\w+)',
+            'events': r'-- Modify event: (\w+)',
+            'sequences': r'-- Modify sequence: (\w+)'
+        }
+        
+        import re
+        for obj_type, pattern in patterns.items():
+            matches = re.findall(pattern, migration_content, re.IGNORECASE)
+            modified_objects[obj_type] = list(set(matches))  # Remove duplicates
+    
+    return modified_objects
 
 
 def display_comparison_summary_table(comparison_data: Dict[str, Any]):
@@ -645,6 +713,9 @@ def display_comparison_summary_table(comparison_data: Dict[str, Any]):
         'sequences': '🔢 Sequences'
     }
     
+    # Parse migration SQL to get actually modified objects
+    modified_objects = parse_modified_objects_from_migration()
+    
     # Prepare data for the summary table
     summary_data = []
     
@@ -657,6 +728,9 @@ def display_comparison_summary_table(comparison_data: Dict[str, Any]):
             only_dest = len(obj_data.get('only_in_dest', []))
             in_both = len(obj_data.get('in_both', []))
             
+            # Get actual modification count from migration SQL
+            actually_modified = len(modified_objects.get(obj_type, []))
+            
             # Determine migration actions
             will_be_created = only_source  # Objects only in source will be created in dest
             will_be_dropped = only_dest    # Objects only in dest will be dropped
@@ -668,6 +742,7 @@ def display_comparison_summary_table(comparison_data: Dict[str, Any]):
                 'In Both': in_both,
                 'Will be Created': f"✅ {will_be_created}" if will_be_created > 0 else "➖ 0",
                 'Will be Dropped': f"🗑️ {will_be_dropped}" if will_be_dropped > 0 else "➖ 0",
+                'Modified': f"⚡ {actually_modified}" if actually_modified > 0 else "➖ 0",
                 'Total Source': only_source + in_both,
                 'Total Destination': only_dest + in_both
             })
@@ -688,6 +763,7 @@ def display_comparison_summary_table(comparison_data: Dict[str, Any]):
                 "In Both": st.column_config.NumberColumn("In Both", help="Objects that exist in both schemas"),
                 "Will be Created": st.column_config.TextColumn("Will be Created", help="Objects that will be created in destination"),
                 "Will be Dropped": st.column_config.TextColumn("Will be Dropped", help="Objects that will be dropped from destination"),
+                "Modified": st.column_config.TextColumn("Modified", help="Objects that exist in both schemas and will be modified due to differences"),
                 "Total Source": st.column_config.NumberColumn("Total Source", help="Total objects in source schema"),
                 "Total Destination": st.column_config.NumberColumn("Total Destination", help="Total objects in destination schema")
             }
@@ -709,11 +785,13 @@ def display_comparison_summary_table(comparison_data: Dict[str, Any]):
             for obj_type, friendly_name in object_types.items():
                 if obj_type in comparison_data:
                     obj_data = comparison_data[obj_type]
+                    actually_modified_objects = modified_objects.get(obj_type, [])
                     
-                    if (obj_data.get('only_in_source') or obj_data.get('only_in_dest')):
+                    # Show details for any object type that has operations
+                    if (obj_data.get('only_in_source') or obj_data.get('only_in_dest') or actually_modified_objects):
                         with st.expander(f"{friendly_name} Details"):
                             
-                            col1, col2 = st.columns(2)
+                            col1, col2, col3 = st.columns(3)
                             
                             with col1:
                                 if obj_data.get('only_in_source'):
@@ -730,8 +808,184 @@ def display_comparison_summary_table(comparison_data: Dict[str, Any]):
                                         st.text(f"  • {name}")
                                 else:
                                     st.text("No objects to drop")
+                            
+                            with col3:
+                                if actually_modified_objects:
+                                    st.markdown("**⚡ Modified:**")
+                                    for name in sorted(actually_modified_objects):
+                                        st.text(f"  • {name}")
+                                else:
+                                    st.text("No objects to modify")
     else:
         st.warning("⚠️ No comparison data available")
+
+
+def display_dependency_graph(output_dir: str):
+    """
+    Display schema dependency graph using Mermaid visualization.
+    
+    Args:
+        output_dir: Directory containing the generated dependency files
+    """
+    if not output_dir or not os.path.exists(output_dir):
+        return
+    
+    # Look for Mermaid dependency file
+    mermaid_file = os.path.join(output_dir, "schema_dependencies.mmd")
+    
+    if os.path.exists(mermaid_file):
+        st.subheader("🕸️ Schema Dependency Graph")
+        st.markdown("""
+        This interactive diagram shows relationships between database objects and migration impact.
+        """)
+        
+        # Add tabs for different views
+        tab1, tab2, tab3 = st.tabs(["� Dependency Graph", "📄 Text Report", "📥 Download Files"])
+        
+        with tab1:
+            # Display DOT graph with dependency types
+            dot_file = os.path.join(output_dir, "schema_dependencies.dot")
+            if os.path.exists(dot_file):
+                
+                # Add option to filter by migration scope
+                st.subheader("🔗 Schema Dependency Graph")
+                
+                # Legend container at the top - separate and prominent
+                st.subheader("📋 Legend")
+                
+                # Create two columns for legend sections
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("""
+                    **🎨 Box Colors (Object Types):**
+                    - 🟦 **Light Blue** - Tables
+                    - 🟩 **Light Green** - Views  
+                    - 🟨 **Light Yellow** - Procedures
+                    - 🟥 **Light Coral** - Functions
+                    - 🟪 **Light Pink** - Triggers
+                    - 🟧 **Light Salmon** - Events
+                    - 🟦 **Lavender** - Sequences
+                    """)
+                
+                with col2:
+                    st.markdown("""
+                    **🔲 Border Colors (Change Types):**
+                    - 🟢 **Green Border** - CREATE (New objects)
+                    - 🟠 **Orange Border** - MODIFY (Changed objects)
+                    - 🔴 **Red Border** - DROP (Removed objects)
+                    - ⚫ **Gray Border** - UNCHANGED (Context objects)
+                    
+                    **🔗 Relationships:**
+                    - **Blue solid** → Foreign key relationships
+                    - **Green dashed** → Reference relationships
+                    """)
+                
+                # Display info box with current sizing info
+                st.info("💡 Objects are optimally sized with compact canvas (20x15) and tight vertical spacing (0.3) for better navigation.")
+                
+                st.markdown("---")  # Separator line
+                
+                # Toggle for migration-only view
+                migration_only = st.checkbox(
+                    "Show only migration-affected objects", 
+                    value=False,
+                    help="Filter to show only objects that are being created, dropped, or modified in this migration"
+                )
+                
+                if migration_only:
+                    st.info("🎯 **Migration-focused view** - Shows only objects involved in this migration (coming soon)")
+                    st.write("*This feature will show dependency impact analysis for the migration*")
+                
+                try:
+                    # Check for SVG first, then PNG, then show DOT source
+                    dot_svg_file = os.path.join(output_dir, "schema_dependencies_dot.svg")
+                    dot_png_file = os.path.join(output_dir, "schema_dependencies_dot.png")
+                    
+                    if os.path.exists(dot_svg_file):
+                        st.write("**Source Schema Dependencies (SVG - Migration Impact Analysis):**")
+                        st.write("*Bold objects with colored borders indicate migration actions*")
+                        
+                        # Read and display SVG
+                        with open(dot_svg_file, 'r') as f:
+                            svg_content = f.read()
+                        
+                        # Display SVG directly without scrolling container
+                        st.markdown(
+                            f'<div style="width: 100%; background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px;">{svg_content}</div>',
+                            unsafe_allow_html=True
+                        )
+                        
+                    elif os.path.exists(dot_png_file):
+                        st.write("**Source Schema Dependencies (PNG - Migration Impact Analysis):**")
+                        st.write("*Bold objects with colored borders indicate migration actions*")
+                        
+                        # Display PNG image
+                        st.image(dot_png_file, use_column_width=True)
+                        
+                    else:
+                        st.warning("DOT visual files not found. Showing source DOT code:")
+                        with open(dot_file, 'r') as f:
+                            dot_content = f.read()
+                        st.code(dot_content, language="dot")
+                        
+                        st.info("💡 **Tip**: To generate the visual DOT graph, run: `dot -Tsvg schema_dependencies.dot -o schema_dependencies_dot.svg`")
+                except Exception as e:
+                    st.error(f"Error displaying DOT graph: {str(e)}")
+            else:
+                st.info("Dependency graph file not available")
+        
+        with tab2:
+            # Display text dependency report if available
+            text_report_file = os.path.join(output_dir, "dependency_report.txt")
+            if os.path.exists(text_report_file):
+                try:
+                    with open(text_report_file, 'r') as f:
+                        report_content = f.read()
+                    st.text_area("Dependency Analysis Report", report_content, height=400)
+                except Exception as e:
+                    st.error(f"Error reading dependency report: {str(e)}")
+            else:
+                st.info("Text dependency report not available")
+        
+        with tab3:
+            # Provide download buttons for dependency files
+            st.markdown("**Available dependency visualization files:**")
+            
+            dependency_files = [
+                ("schema_dependencies.mmd", "Mermaid Diagram", "text/plain"),
+                ("schema_dependencies.json", "JSON Data", "application/json"),
+                ("schema_dependencies.dot", "Graphviz DOT", "text/plain"),
+                ("dependency_report.txt", "Text Report", "text/plain")
+            ]
+            
+            cols = st.columns(2)
+            for i, (filename, description, mime_type) in enumerate(dependency_files):
+                filepath = os.path.join(output_dir, filename)
+                if os.path.exists(filepath):
+                    try:
+                        with open(filepath, 'r') as f:
+                            content = f.read()
+                        
+                        with cols[i % 2]:
+                            st.download_button(
+                                f"⬇️ {description}",
+                                content,
+                                file_name=filename,
+                                mime=mime_type,
+                                help=f"Download {description.lower()}"
+                            )
+                    except Exception as e:
+                        st.error(f"Error reading {filename}: {str(e)}")
+            
+            # Instructions for using the files
+            st.markdown("""
+            **How to use these files:**
+            - **Mermaid (.mmd)**: Paste into [mermaid.live](https://mermaid.live/) for web viewing
+            - **JSON (.json)**: Use for programmatic analysis or custom visualizations
+            - **DOT (.dot)**: Use with Graphviz: `dot -Tpng file.dot -o output.png`
+            - **Text (.txt)**: Human-readable dependency analysis
+            """)
 
 
 def display_execution_results(execution_results: Dict[str, Any]):
@@ -1507,10 +1761,8 @@ def display_sidebar_info():
             source_icon = "🟢" if source_configured else "🔴"
             dest_icon = "🟢" if dest_configured else "🔴"
             
-            st.markdown(f"""
-            {source_icon} **Source:** {'Configured' if source_configured else 'Not configured'}
-            {dest_icon} **Destination:** {'Configured' if dest_configured else 'Not configured'}
-            """)
+            st.markdown(f"{source_icon} **Source:** {'Configured' if source_configured else 'Not configured'}")
+            st.markdown(f"{dest_icon} **Destination:** {'Configured' if dest_configured else 'Not configured'}")
             
             if st.session_state.get('migration_results'):
                 st.markdown("🟢 **Migration:** Generated")
@@ -1518,11 +1770,9 @@ def display_sidebar_info():
                 st.markdown("🔴 **Migration:** Not generated")
         else:
             st.markdown("### 📡 **Connection Status**")
-            st.markdown("""
-            🔴 **Source:** Not configured
-            🔴 **Destination:** Not configured
-            🔴 **Migration:** Not generated
-            """)
+            st.markdown("🔴 **Source:** Not configured")
+            st.markdown("🔴 **Destination:** Not configured") 
+            st.markdown("🔴 **Migration:** Not generated")
         
         st.markdown("---")
         
@@ -1569,7 +1819,7 @@ def display_sidebar_info():
         st.markdown("---")
         st.markdown("""
         <div style='text-align: center; color: #666; font-size: 0.8em;'>
-            <p><strong>DDL Wizard v2.0</strong></p>
+            <p><strong>DDL Wizard v1.3.0</strong></p>
             <p>🚀 Tab-based Interface</p>
             <p>💾 Connection Management</p>
             <p>⚡ SQL Execution</p>
@@ -1699,10 +1949,13 @@ def main():
                 - Perform safety analysis and generate warnings
                 - Create detailed migration report
                 """)
-            
-            with col2:
+                
+                # Move the button to the left column
                 if st.button("🔄 Generate Migration", type="primary", help="Analyze schemas and generate migration files"):
                     run_migration_analysis()
+            
+            with col2:
+                st.write("")  # Empty column for better layout
     
     # ==================== TAB 3: RESULTS ====================
     with tab3:
@@ -1735,7 +1988,7 @@ def main():
         with col2:
             st.markdown("""
             <div style='text-align: center; color: #666;'>
-                <p>DDL Wizard v2.0 - Database Schema Migration Tool</p>
+                <p>DDL Wizard v1.3.0 - Database Schema Migration Tool</p>
                 <p>Built with ❤️ using Streamlit</p>
             </div>
             """, unsafe_allow_html=True)
