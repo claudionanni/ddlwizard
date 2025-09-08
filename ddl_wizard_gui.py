@@ -1819,7 +1819,7 @@ def display_sidebar_info():
         st.markdown("---")
         st.markdown("""
         <div style='text-align: center; color: #666; font-size: 0.8em;'>
-            <p><strong>DDL Wizard v1.3.0</strong></p>
+            <p><strong>DDL Wizard v1.4.0</strong></p>
             <p>🚀 Tab-based Interface</p>
             <p>💾 Connection Management</p>
             <p>⚡ SQL Execution</p>
@@ -1988,7 +1988,7 @@ def main():
         with col2:
             st.markdown("""
             <div style='text-align: center; color: #666;'>
-                <p>DDL Wizard v1.3.0 - Database Schema Migration Tool</p>
+                <p>DDL Wizard v1.4.0 - Database Schema Migration Tool</p>
                 <p>Built with ❤️ using Streamlit</p>
             </div>
             """, unsafe_allow_html=True)

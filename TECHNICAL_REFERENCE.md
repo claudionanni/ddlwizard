@@ -1,7 +1,7 @@
 # DDL Wizard Technical Reference Document
 
-**Version:** 1.2.1  
-**Last Updated:** September 4, 2025 (Rollback Architecture Overhaul)  
+**Version:** 1.4.0  
+**Last Updated:** September 8, 2025 (Enhanced Dependency Graph Visualization)  
 **Purpose:** Internal technical reference to maintain consistency and prevent regressions
 
 ---
@@ -171,7 +171,82 @@ def generate_migration_sql(self):
     ]
 ```
 
-### 4. DDL Storage and Rollback Architecture (v1.2.1 CRITICAL)
+### 8. Schema Dependency Visualization (v1.4.0 Enhanced)
+
+**CRITICAL:** Complete visual dependency analysis with optimized display and accurate object detection.
+
+**BREAKTHROUGH FEATURES (v1.4.0):**
+```python
+DEPENDENCY_VISUALIZATION_FEATURES = {
+    'canvas_optimization': True,        # Compact 20x15 canvas (was 30x25)
+    'tight_layout': True,              # 0.3 vertical spacing (was 0.5)
+    'accurate_borders': True,          # Only modified objects get orange borders
+    'dropped_object_detection': True,  # Red borders for deletion indicators
+    'complete_object_support': True,   # All 7 types including sequences
+    'visual_legend': True,             # Emoji-based legend for object types
+    'migration_sql_parsing': True      # Real-time analysis of actual modifications
+}
+```
+
+**COLOR CODING SYSTEM:**
+```python
+OBJECT_TYPE_COLORS = {
+    'tables': 'lightblue',      # 🟦 Blue squares
+    'views': 'lightgreen',      # 🟩 Green squares  
+    'procedures': 'lightyellow', # 🟨 Yellow squares
+    'functions': 'lightcoral',   # 🟥 Red squares
+    'triggers': 'lightpink',     # 🩷 Pink squares
+    'events': 'lightsalmon',     # 🟧 Orange squares
+    'sequences': 'lavender'      # 🔷 Blue diamonds (v1.4.0)
+}
+
+BORDER_COLOR_SYSTEM = {
+    'green': 'CREATE operations',   # New objects
+    'orange': 'MODIFY operations',  # Changed objects (accurate detection)
+    'red': 'DROP operations',       # Deleted objects (v1.4.0 fixed)
+    'gray': 'UNCHANGED objects'     # No modifications
+}
+```
+
+**ARCHITECTURE IMPROVEMENTS:**
+```python
+# v1.4.0 Canvas Configuration
+CANVAS_CONFIG = {
+    'size': '20,15',           # Optimized from 30,25
+    'ranksep': '0.3',          # Tighter vertical spacing from 0.5
+    'nodesep': '0.5',          # Maintained horizontal spacing
+    'splines': 'ortho',        # Clean orthogonal connections
+    'rankdir': 'TB'            # Top-to-bottom layout
+}
+
+# v1.4.0 Accurate Modification Detection
+def analyze_migration_changes(migration_sql: str) -> Set[str]:
+    """Parse migration SQL to identify actually modified objects."""
+    
+    # CRITICAL: Only mark objects that appear in migration SQL
+    modified_objects = set()
+    
+    # Parse ALTER TABLE, ALTER VIEW, etc. statements
+    for line in migration_sql.split('
+'):
+        if line.strip().startswith(('ALTER TABLE', 'ALTER VIEW')):
+            object_name = extract_object_name(line)
+            modified_objects.add(object_name)
+    
+    return modified_objects  # Only objects with actual changes
+```
+
+**GUI INTEGRATION:**
+```python
+VISUALIZATION_DISPLAY = {
+    'tabbed_interface': True,          # Multiple view formats
+    'mermaid_rendering': True,         # Modern diagram display
+    'svg_png_support': True,           # Multiple output formats
+    'interactive_legend': True,        # Object type identification
+    'download_options': True,          # Export capabilities
+    'real_time_generation': True      # On-demand visualization
+}
+```
 
 **BREAKTHROUGH:** Fixed fundamental DDL storage issue for complete rollback capability.
 

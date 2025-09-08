@@ -1,6 +1,6 @@
 # 🧙‍♂️ DDL Wizard - MariaDB Schema Management Tool
 
-**Version 1.3.0** - Professional GUI with Complete Rollback Architecture
+**Version 1.4.0** - Enhanced Dependency Graph Visualization with Professional GUI
 
 A comprehensive Python tool for MariaDB/MySQL schema management, version control, and automated migration generation. DDL Wizard provides professional-grade features for safe, reliable database schema evolution with **verified complete rollback functionality** and a **modern web-based interface**.
 
@@ -54,6 +54,7 @@ A comprehensive Python tool for MariaDB/MySQL schema management, version control
 - **Configuration Management**: YAML-based configuration with environment variable support
 - **Migration History**: SQLite-based tracking of all migration executions
 - **Schema Visualization**: Generate ER diagrams and documentation (Mermaid, Graphviz, HTML)
+- **🕸️ Dependency Graph Visualization (v1.4.0)**: Interactive visual dependency analysis with object relationships, modification tracking, and professional display
 - **Multiple Operation Modes**: Extract, compare, migrate, visualize, and history modes
 - **🧪 Test Data Included**: Ready-to-use sample schemas for immediate testing (`testdata/`)
 
@@ -357,9 +358,9 @@ default:
 ### Environment Variables
 Configuration files support environment variable substitution using `${VARIABLE_NAME}` syntax.
 
-## 🎯 Supported Database Objects (v1.2.1 Complete)
+## 🎯 Supported Database Objects (v1.4.0 Enhanced Visualization)
 
-DDL Wizard provides **complete support for all 7 MariaDB/MySQL object types** with full migration and rollback capabilities:
+DDL Wizard provides **complete support for all 7 MariaDB/MySQL object types** with full migration, rollback, and **enhanced dependency visualization** capabilities:
 
 ### ✅ Tables 
 - **Detection**: Column structure, indexes, constraints, table properties
@@ -549,6 +550,54 @@ Generates:
 - `documentation/schema_erd.dot`
 - `documentation/schema_structure.json`
 
+## 🕸️ Dependency Graph Visualization (v1.4.0)
+
+**NEW**: Advanced visual dependency analysis with interactive display and accurate object tracking.
+
+### Features
+- **🎯 Compact Display**: Optimized 20x15 canvas for clean, professional visualization
+- **🔍 Accurate Detection**: Precise identification of modified, created, and dropped objects
+- **🎨 Color-Coded Objects**: Visual distinction between all 7 database object types
+- **📊 Interactive Legend**: Emoji-based indicators for easy object type identification
+- **⚡ Real-Time Analysis**: Migration SQL parsing for accurate modification tracking
+
+### Object Color Scheme
+- **🟦 Tables**: Light blue with border indicators for operations
+- **🟩 Views**: Light green for view objects  
+- **🟨 Procedures**: Light yellow for stored procedures
+- **🟥 Functions**: Light coral for user-defined functions
+- **🩷 Triggers**: Light pink for database triggers
+- **🟧 Events**: Light salmon for scheduled events
+- **🔷 Sequences**: Lavender with blue diamond indicators (MariaDB 10.3+)
+
+### Border Color System
+- **🟢 Green Border**: CREATE operations (new objects)
+- **🟠 Orange Border**: MODIFY operations (changed objects only)
+- **🔴 Red Border**: DROP operations (objects being deleted)
+- **⚪ Gray Border**: UNCHANGED objects (no modifications)
+
+### Usage
+The dependency graph is automatically generated when visualization is enabled and displayed in the GUI's Results tab with multiple viewing options:
+
+```bash
+# Generate migration with dependency visualization
+python main.py compare --visualize \
+  --source-host localhost --source-user root --source-password password --source-schema source_db \
+  --dest-host localhost --dest-user root --dest-password password --dest-schema dest_db
+```
+
+### Output Files
+- `ddl_output/dependency_graph.svg` - Scalable vector graphics
+- `ddl_output/dependency_graph.png` - Portable network graphics  
+- `ddl_output/dependency_graph.mmd` - Mermaid diagram source
+- `ddl_output/dependency_report.txt` - Text-based dependency analysis
+
+### GUI Integration
+The web interface provides tabbed access to:
+- **🕸️ Dependency Graph**: Interactive visual display
+- **📄 Text Report**: Detailed dependency analysis
+- **📥 Download Files**: Export options for all formats
+
 ## 📈 Migration History
 
 Track all migration executions with detailed logging:
@@ -665,6 +714,35 @@ ddl_output/
 - **Memory Issues**: Use `--verbose` for detailed logging
 
 ## 📝 Changelog
+
+## 📝 Changelog
+
+### v1.4.0 (September 8, 2025) - Enhanced Dependency Graph Visualization
+🎯 **MAJOR ENHANCEMENT**: Complete overhaul of schema dependency visualization system
+
+#### ✅ Visualization Improvements
+- **Optimized Canvas Size**: Reduced from 30x25 to 20x15 for better display in GUI
+- **Improved Layout**: Tighter vertical spacing (0.3 vs 0.5) for cleaner presentation  
+- **Enhanced Object Detection**: Fixed missing dropped objects in dependency graphs
+- **Accurate Modification Indicators**: Only actually modified objects receive orange borders
+- **Complete Object Support**: Added sequences to visualization and comprehensive legend
+
+#### 🔧 Technical Enhancements
+- **Migration SQL Parsing**: Real-time analysis of actual modifications vs. potential changes
+- **Border Color Accuracy**: Proper red borders for dropped objects, orange only for modified
+- **Visual Legend System**: Emoji-based indicators for all 7 object types
+- **Canvas Optimization**: Single container display without scrolling issues
+
+#### 🎨 User Experience  
+- **Professional Display**: Clean, compact dependency graphs suitable for documentation
+- **Interactive Legend**: Clear object type identification with color coding
+- **Multi-Format Export**: SVG, PNG, and Mermaid diagram support
+- **Responsive Layout**: Optimized for both desktop and tablet viewing
+
+#### 📊 Quality Improvements
+- **Version Correction**: Fixed GUI showing incorrect v2.0 instead of proper version
+- **Path Cleanup**: Removed hardcoded test migration file paths
+- **Visual Consistency**: Unified color scheme across all visualization components
 
 ### v1.2.1 (September 4, 2025) - Complete Rollback Architecture
 🚀 **MAJOR BREAKTHROUGH**: Achieved 100% round-trip testing success
