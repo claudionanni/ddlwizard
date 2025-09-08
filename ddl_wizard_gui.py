@@ -1,4 +1,22 @@
 """
+Copyright (C) 2025 Claudio Nanni
+This file is part of DDL Wizard.
+
+DDL Wizard is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+DDL Wizard is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with DDL Wizard.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
+"""
 DDL Wizard Streamlit GUI
 ========================
 
@@ -1516,6 +1534,7 @@ def display_sidebar_info():
         🔗 [**Repository**](https://github.com/claudionanni/ddlwizard)  
         📖 [**Documentation**](https://github.com/claudionanni/ddlwizard#readme)  
         🐛 [**Report Issues**](https://github.com/claudionanni/ddlwizard/issues)  
+        ⭐ [**Release Notes**](https://github.com/claudionanni/ddlwizard/releases)  
         📋 [**Contributing**](https://github.com/claudionanni/ddlwizard/blob/main/CONTRIBUTING.md)
         """)
         
