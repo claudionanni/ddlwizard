@@ -8,6 +8,7 @@ This module contains the main business logic for schema comparison and migration
 
 import logging
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 
@@ -203,6 +204,8 @@ class DDLWizardCore:
                 return self.source_db.get_trigger_ddl(object_name)
             elif object_type == 'events':
                 return self.source_db.get_event_ddl(object_name)
+            elif object_type == 'sequences':
+                return self.source_db.get_sequence_ddl(object_name)
             return ""
         
         def get_dest_ddl(object_type: str, object_name: str) -> str:
@@ -218,6 +221,8 @@ class DDLWizardCore:
                 return self.dest_db.get_trigger_ddl(object_name)
             elif object_type == 'events':
                 return self.dest_db.get_event_ddl(object_name)
+            elif object_type == 'sequences':
+                return self.dest_db.get_sequence_ddl(object_name)
             return ""
         
         logger.info("Generating migration SQL...")
@@ -251,6 +256,8 @@ class DDLWizardCore:
                 return self.source_db.get_trigger_ddl(object_name)
             elif object_type == 'events':
                 return self.source_db.get_event_ddl(object_name)
+            elif object_type == 'sequences':
+                return self.source_db.get_sequence_ddl(object_name)
             return ""
         
         def get_dest_ddl(object_type: str, object_name: str) -> str:
@@ -266,6 +273,8 @@ class DDLWizardCore:
                 return self.dest_db.get_trigger_ddl(object_name)
             elif object_type == 'events':
                 return self.dest_db.get_event_ddl(object_name)
+            elif object_type == 'sequences':
+                return self.dest_db.get_sequence_ddl(object_name)
             return ""
         
         # Import the rollback generation function from main module
@@ -310,6 +319,8 @@ class DDLWizardCore:
                 return self.source_db.get_trigger_ddl(object_name)
             elif object_type == 'events':
                 return self.source_db.get_event_ddl(object_name)
+            elif object_type == 'sequences':
+                return self.source_db.get_sequence_ddl(object_name)
             return ""
         
         def get_dest_ddl(object_type: str, object_name: str) -> str:
@@ -325,6 +336,8 @@ class DDLWizardCore:
                 return self.dest_db.get_trigger_ddl(object_name)
             elif object_type == 'events':
                 return self.dest_db.get_event_ddl(object_name)
+            elif object_type == 'sequences':
+                return self.dest_db.get_sequence_ddl(object_name)
             return ""
         
         # Generate migration report data from comparison results
@@ -501,7 +514,7 @@ class DDLWizardCore:
         return {
             'source_schema': source_config.schema,
             'dest_schema': dest_config.schema,
-            'timestamp': comparison.get('timestamp', 'unknown'),
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'detailed_changes': detailed_changes,
             'safety_warnings': [{'level': w.level.value, 'message': w.message} for w in safety_warnings],
             'comparison_data': comparison  # Include full comparison data for detailed reporting
@@ -581,7 +594,7 @@ class DDLWizardCore:
         migration_file = output_path / self.config.output.migration_file
         rollback_file = output_path / self.config.output.rollback_file
         migration_report_path = output_path / "migration_report.md"
-        comparison_report_path = output_path / "comparison_report.txt"
+        migration_summary_path = output_path / "migration_summary.txt"
         
         migration_file.write_text(migration_sql)
         rollback_file.write_text(rollback_sql)
@@ -589,31 +602,44 @@ class DDLWizardCore:
         # Generate migration report
         generate_migration_report(migration_report_data, str(migration_report_path))
         
-        # Generate comparison report
+        # Generate migration summary table
         comparison_summary = self._generate_comparison_summary(migration_report_data)
-        comparison_report_path.write_text(comparison_summary)
+        migration_summary_path.write_text(comparison_summary)
         
         return str(migration_file), str(rollback_file), str(migration_report_path)
     
     def _generate_comparison_summary(self, migration_report_data: Dict) -> str:
-        """Generate a detailed text summary of the comparison."""
+        """Generate a detailed text summary of the comparison with tabular format."""
         lines = [
             "DDL Wizard Schema Comparison Report",
-            "=" * 40,
+            "=" * 50,
             f"Source Schema: {migration_report_data.get('source_schema', 'unknown')}",
             f"Destination Schema: {migration_report_data.get('dest_schema', 'unknown')}",
             f"Generated: {migration_report_data.get('timestamp', 'unknown')}",
             "",
-            f"Total Operations: {len(migration_report_data.get('detailed_changes', []))}",
-            f"Safety Warnings: {len(migration_report_data.get('safety_warnings', []))}",
-            "",
-            "Changes Summary:",
         ]
         
+        # Generate tabular summary
+        comparison_data = migration_report_data.get('comparison_data', {})
+        detailed_changes = migration_report_data.get('detailed_changes', [])
+        if comparison_data:
+            lines.extend(self._generate_tabular_summary(comparison_data, detailed_changes))
+        
+        # Add detailed changes if any
         changes = migration_report_data.get('detailed_changes', [])
-        if not changes:
-            lines.append("  No changes detected")
-        else:
+        total_operations = len(changes)
+        
+        lines.extend([
+            "",
+            f"Total Migration Operations: {total_operations}",
+            f"Safety Warnings: {len(migration_report_data.get('safety_warnings', []))}",
+        ])
+        
+        if changes:
+            lines.append("")
+            lines.append("Detailed Changes:")
+            lines.append("-" * 20)
+            
             # Group changes by object type for better reporting
             object_types = {}
             for change in changes:
@@ -630,41 +656,124 @@ class DDLWizardCore:
                 lines.append(f"  {obj_type.upper()}:")
                 for change in changes_list:
                     lines.append(f"    - {change}")
-            
-            # Add detailed differences information that tests expect
-            comparison_data = migration_report_data.get('comparison_data', {})
+        else:
             lines.append("")
-            lines.append("Detailed Differences:")
-            
-            # Check for functions only in source
-            functions_diff = comparison_data.get('functions', {})
-            if functions_diff.get('only_in_source'):
-                lines.append("  Functions only in source:")
-                for func in functions_diff['only_in_source']:
-                    lines.append(f"    - {func}")
-            
-            # Check for procedures differences  
-            procedures_diff = comparison_data.get('procedures', {})
-            if procedures_diff.get('in_both'):
-                lines.append("  Procedures with differences:")
-                for proc in procedures_diff['in_both']:
-                    lines.append(f"    - {proc}")
-            
-            # Check for triggers
-            triggers_diff = comparison_data.get('triggers', {})
-            if triggers_diff.get('only_in_source') or triggers_diff.get('only_in_dest') or triggers_diff.get('in_both'):
-                lines.append("  Triggers:")
-                if triggers_diff.get('only_in_source'):
-                    for trigger in triggers_diff['only_in_source']:
-                        lines.append(f"    - Missing in destination: {trigger}")
-                if triggers_diff.get('only_in_dest'):
-                    for trigger in triggers_diff['only_in_dest']:
-                        lines.append(f"    - Extra in destination: {trigger}")
-                if triggers_diff.get('in_both'):
-                    for trigger in triggers_diff['in_both']:
-                        lines.append(f"    - Different: {trigger}")
+            lines.append("✅ Schemas are in sync - no migration operations required")
         
-        return '\n'.join(lines)
+        # Add safety warnings if any
+        safety_warnings = migration_report_data.get('safety_warnings', [])
+        if safety_warnings:
+            lines.append("")
+            lines.append("Safety Warnings:")
+            lines.append("-" * 15)
+            for warning in safety_warnings:
+                lines.append(f"  ⚠️  {warning.get('message', 'Unknown warning')}")
+        
+        return "\n".join(lines)
+    
+    def _generate_tabular_summary(self, comparison_data: Dict, detailed_changes: List = None) -> list:
+        """Generate a tabular summary of schema comparison results."""
+        lines = [
+            "Schema Objects Summary",
+            "-" * 22,
+            ""
+        ]
+        
+        # Define object types with descriptions
+        object_types = {
+            'tables': 'Tables',
+            'views': 'Views', 
+            'procedures': 'Procedures',
+            'functions': 'Functions',
+            'triggers': 'Triggers',
+            'events': 'Events',
+            'sequences': 'Sequences'
+        }
+        
+        # Count operations by object type from detailed changes (the authoritative source)
+        operation_counts = {}
+        if detailed_changes:
+            for change in detailed_changes:
+                operation = change.get('operation', 'unknown')
+                obj_type = change.get('object_type', 'unknown').lower()
+                
+                # Normalize object type names to match comparison_data keys
+                if obj_type == 'table':
+                    obj_type = 'tables'
+                elif obj_type == 'view':
+                    obj_type = 'views'
+                elif obj_type == 'procedure':
+                    obj_type = 'procedures'
+                elif obj_type == 'function':
+                    obj_type = 'functions'
+                elif obj_type == 'trigger':
+                    obj_type = 'triggers'
+                elif obj_type == 'event':
+                    obj_type = 'events'
+                elif obj_type == 'sequence':
+                    obj_type = 'sequences'
+                
+                if obj_type not in operation_counts:
+                    operation_counts[obj_type] = {'CREATE': 0, 'DROP': 0, 'MODIFY': 0}
+                
+                if operation in operation_counts[obj_type]:
+                    operation_counts[obj_type][operation] += 1
+        
+        # Create header
+        header = f"{'Object Type':<12} {'Source':<8} {'Dest':<8} {'Both':<8} {'Create':<8} {'Drop':<8} {'Modify':<8} {'Total':<8}"
+        lines.append(header)
+        lines.append("-" * len(header))
+        
+        total_create_ops = 0
+        total_drop_ops = 0
+        total_modify_ops = 0
+        
+        for obj_type, friendly_name in object_types.items():
+            if obj_type in comparison_data:
+                obj_data = comparison_data[obj_type]
+                
+                # Calculate counts for display (source/dest/both)
+                only_source = len(obj_data.get('only_in_source', []))
+                only_dest = len(obj_data.get('only_in_dest', []))
+                in_both = len(obj_data.get('in_both', []))
+                
+                # Get actual operation counts from detailed changes
+                ops = operation_counts.get(obj_type, {'CREATE': 0, 'DROP': 0, 'MODIFY': 0})
+                will_create = ops['CREATE']
+                will_drop = ops['DROP']
+                will_modify = ops['MODIFY']
+                total_ops = will_create + will_drop + will_modify
+                
+                total_create_ops += will_create
+                total_drop_ops += will_drop
+                total_modify_ops += will_modify
+                
+                # Total counts for source/dest columns
+                total_source = only_source + in_both
+                total_dest = only_dest + in_both
+                
+                # Format row
+                row = f"{friendly_name:<12} {total_source:<8} {total_dest:<8} {in_both:<8} {will_create:<8} {will_drop:<8} {will_modify:<8} {total_ops:<8}"
+                lines.append(row)
+        
+        total_all_ops = total_create_ops + total_drop_ops + total_modify_ops
+        lines.append("-" * len(header))
+        lines.append(f"{'TOTAL':<12} {'':<8} {'':<8} {'':<8} {total_create_ops:<8} {total_drop_ops:<8} {total_modify_ops:<8} {total_all_ops:<8}")
+        lines.append("")
+        
+        # Add legend
+        lines.extend([
+            "Column Descriptions:",
+            "  Source:    Total objects in source schema",
+            "  Dest:      Total objects in destination schema", 
+            "  Both:      Objects existing in both schemas",
+            "  Create:    Objects to be created in destination",
+            "  Drop:      Objects to be dropped from destination",
+            "  Modify:    Objects to be modified (same name, different definition)",
+            "  Total:     All operations for this object type",
+        ])
+        
+        return lines
 
 
 def run_complete_migration(source_config: DatabaseConfig, dest_config: DatabaseConfig, 

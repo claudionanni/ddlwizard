@@ -7,6 +7,7 @@ This provides an easy-to-use interface for database schema migrations.
 """
 
 import streamlit as st
+import pandas as pd
 import os
 import json
 import traceback
@@ -594,6 +595,10 @@ def display_migration_results(results: Dict[str, Any]):
             else:
                 st.info(f"🔵 **{warning['level']}:** {warning['message']}")
     
+    # Schema comparison summary table
+    st.subheader("📊 Schema Comparison Summary")
+    display_comparison_summary_table(results['comparison'])
+    
     # Comparison details in scrollable container
     if st.checkbox("Show Detailed Comparison", value=False):
         st.subheader("🔍 Schema Comparison Details")
@@ -602,6 +607,113 @@ def display_migration_results(results: Dict[str, Any]):
         """, unsafe_allow_html=True)
         st.json(results['comparison'])
         st.markdown("</div>", unsafe_allow_html=True)
+
+
+def display_comparison_summary_table(comparison_data: Dict[str, Any]):
+    """
+    Display a human-readable summary table of schema comparison results.
+    
+    Args:
+        comparison_data: Comparison results from schema comparator
+    """
+    # Define object types with friendly names
+    object_types = {
+        'tables': '📊 Tables',
+        'views': '👁️ Views', 
+        'procedures': '⚙️ Procedures',
+        'functions': '🔧 Functions',
+        'triggers': '⚡ Triggers',
+        'events': '⏰ Events',
+        'sequences': '🔢 Sequences'
+    }
+    
+    # Prepare data for the summary table
+    summary_data = []
+    
+    for obj_type, friendly_name in object_types.items():
+        if obj_type in comparison_data:
+            obj_data = comparison_data[obj_type]
+            
+            # Calculate counts
+            only_source = len(obj_data.get('only_in_source', []))
+            only_dest = len(obj_data.get('only_in_dest', []))
+            in_both = len(obj_data.get('in_both', []))
+            
+            # Determine migration actions
+            will_be_created = only_source  # Objects only in source will be created in dest
+            will_be_dropped = only_dest    # Objects only in dest will be dropped
+            
+            summary_data.append({
+                'Object Type': friendly_name,
+                'Only in Source': only_source,
+                'Only in Destination': only_dest,
+                'In Both': in_both,
+                'Will be Created': f"✅ {will_be_created}" if will_be_created > 0 else "➖ 0",
+                'Will be Dropped': f"🗑️ {will_be_dropped}" if will_be_dropped > 0 else "➖ 0",
+                'Total Source': only_source + in_both,
+                'Total Destination': only_dest + in_both
+            })
+    
+    if summary_data:
+        # Create DataFrame
+        df = pd.DataFrame(summary_data)
+        
+        # Display the table
+        st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Object Type": st.column_config.TextColumn("Object Type", width="medium"),
+                "Only in Source": st.column_config.NumberColumn("Only in Source", help="Objects that exist only in source schema"),
+                "Only in Destination": st.column_config.NumberColumn("Only in Destination", help="Objects that exist only in destination schema"),
+                "In Both": st.column_config.NumberColumn("In Both", help="Objects that exist in both schemas"),
+                "Will be Created": st.column_config.TextColumn("Will be Created", help="Objects that will be created in destination"),
+                "Will be Dropped": st.column_config.TextColumn("Will be Dropped", help="Objects that will be dropped from destination"),
+                "Total Source": st.column_config.NumberColumn("Total Source", help="Total objects in source schema"),
+                "Total Destination": st.column_config.NumberColumn("Total Destination", help="Total objects in destination schema")
+            }
+        )
+        
+        # Display summary statistics
+        total_operations = sum(len(obj_data.get('only_in_source', [])) + len(obj_data.get('only_in_dest', [])) 
+                             for obj_data in comparison_data.values())
+        
+        if total_operations > 0:
+            st.info(f"📈 **Migration Summary**: {total_operations} total operations required to sync destination with source")
+        else:
+            st.success("✅ **Schemas are in sync**: No migration operations required")
+            
+        # Show object-specific details if requested
+        if st.checkbox("Show Object Names", value=False):
+            st.subheader("📝 Detailed Object Lists")
+            
+            for obj_type, friendly_name in object_types.items():
+                if obj_type in comparison_data:
+                    obj_data = comparison_data[obj_type]
+                    
+                    if (obj_data.get('only_in_source') or obj_data.get('only_in_dest')):
+                        with st.expander(f"{friendly_name} Details"):
+                            
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                if obj_data.get('only_in_source'):
+                                    st.markdown("**✅ Will be Created:**")
+                                    for name in sorted(obj_data['only_in_source']):
+                                        st.text(f"  • {name}")
+                                else:
+                                    st.text("No objects to create")
+                            
+                            with col2:
+                                if obj_data.get('only_in_dest'):
+                                    st.markdown("**🗑️ Will be Dropped:**")
+                                    for name in sorted(obj_data['only_in_dest']):
+                                        st.text(f"  • {name}")
+                                else:
+                                    st.text("No objects to drop")
+    else:
+        st.warning("⚠️ No comparison data available")
 
 
 def display_execution_results(execution_results: Dict[str, Any]):

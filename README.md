@@ -1,8 +1,8 @@
 # 🧙‍♂️ DDL Wizard - MariaDB Schema Management Tool
 
-**Version 1.2.1** - Complete Rollback Architecture with 100% Round-Trip Capability
+**Version 1.3.0** - Professional GUI with Complete Rollback Architecture
 
-A comprehensive Python tool for MariaDB/MySQL schema management, version control, and automated migration generation. DDL Wizard provides professional-grade features for safe, reliable database schema evolution with **verified complete rollback functionality**.
+A comprehensive Python tool for MariaDB/MySQL schema management, version control, and automated migration generation. DDL Wizard provides professional-grade features for safe, reliable database schema evolution with **verified complete rollback functionality** and a **modern web-based interface**.
 
 ## 🔬 Technical Approach & Methodology
 

@@ -6,7 +6,7 @@ A comprehensive tool for extracting DDL objects from databases, managing them in
 and generating migration scripts for schema synchronization.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.3.0"
 __author__ = "Claudio Nanni"
 
 # Import main classes for easy access

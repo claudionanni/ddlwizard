@@ -4,9 +4,12 @@ Analyzes differences between source and destination schemas.
 """
 
 import re
+import logging
 from datetime import datetime
 from enum import Enum
 from typing import List, Dict, Any, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class ChangeType(Enum):
